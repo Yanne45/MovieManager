@@ -1,0 +1,10 @@
+pub mod ingestion;
+pub mod filename_parser;
+pub mod tmdb;
+pub mod pipeline;
+pub mod media_analysis;
+pub mod rules_engine;
+pub mod change_log;
+pub mod image_cache;
+pub mod backup;
+pub mod nfo_parser;

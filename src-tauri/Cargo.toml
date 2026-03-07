@@ -1,0 +1,66 @@
+[package]
+name = "moviemanager"
+version = "0.1.0"
+description = "Desktop app for managing a video file collection"
+authors = ["MovieManager"]
+edition = "2021"
+
+[lib]
+name = "moviemanager_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client (for TMDB/OMDb/TVDB)
+reqwest = { version = "0.12", features = ["json"] }
+
+# File hashing
+sha2 = "0.10"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Regex (filename parsing)
+regex = "1"
+
+# URL encoding (TMDB queries)
+urlencoding = "2"
+
+# Glob patterns (file scanning)
+glob = "0.3"
+walkdir = "2"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Zip (backup/export)
+zip = "2"
+
+# XML parsing (NFO import)
+quick-xml = { version = "0.36", features = ["serialize"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

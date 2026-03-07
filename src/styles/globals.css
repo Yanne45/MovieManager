@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --color-primary: #2F6FDB;
+  --color-primary-hover: #255CC0;
+  --color-primary-soft: #E9F1FF;
+
+  --bg-app: #F4F6FA;
+  --bg-surface: #FFFFFF;
+  --bg-surface-alt: #EEF1F6;
+
+  --text-main: #1F2937;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+
+  --border: #E5E7EB;
+  --radius: 8px;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+
+  /* Score badge colors */
+  --score-a-bg: #DCFCE7;
+  --score-a-text: #16A34A;
+  --score-b-bg: #E9F1FF;
+  --score-b-text: #2F6FDB;
+  --score-c-bg: #FEF3C7;
+  --score-c-text: #D97706;
+  --score-d-bg: #FEE2E2;
+  --score-d-text: #DC2626;
+}
+
+.dark {
+  --color-primary: #5B93F0;
+  --color-primary-hover: #4A82E0;
+  --color-primary-soft: #1E2A45;
+
+  --bg-app: #0F1117;
+  --bg-surface: #1A1D27;
+  --bg-surface-alt: #242733;
+
+  --text-main: #E5E7EB;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+
+  --border: #2D3140;
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --error: #F87171;
+
+  /* Score badge backgrounds — softer for dark */
+  --score-a-bg: #14532D;
+  --score-a-text: #4ADE80;
+  --score-b-bg: #1E2A45;
+  --score-b-text: #5B93F0;
+  --score-c-bg: #422006;
+  --score-c-text: #FBBF24;
+  --score-d-bg: #450A0A;
+  --score-d-text: #F87171;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
