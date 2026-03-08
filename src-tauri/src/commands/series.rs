@@ -5,7 +5,8 @@ use sqlx;
 
 #[tauri::command]
 pub async fn get_series_list(state: State<'_, AppState>) -> Result<Vec<SeriesListItem>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     // Get all series
     let all_series = queries::get_series_list(pool)
@@ -59,7 +60,8 @@ pub async fn get_series_detail(
     state: State<'_, AppState>,
     id: i64,
 ) -> Result<Option<SeriesDetail>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
     let series = queries::get_series(pool, id)
         .await
         .map_err(|e| e.to_string())?;

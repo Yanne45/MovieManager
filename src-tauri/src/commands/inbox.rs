@@ -9,7 +9,8 @@ pub async fn get_inbox_items(
     state: State<'_, AppState>,
     status: Option<String>,
 ) -> Result<Vec<InboxItem>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
     let filter = status.as_deref().unwrap_or("pending");
 
     let items = sqlx::query_as::<_, InboxItem>(
@@ -26,7 +27,8 @@ pub async fn get_inbox_items(
 /// Count pending inbox items (for sidebar badge)
 #[tauri::command]
 pub async fn get_inbox_count(state: State<'_, AppState>) -> Result<i64, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
     let row: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM inbox_items WHERE status = 'pending'"
     )
@@ -44,7 +46,8 @@ pub async fn resolve_inbox_link(
     entity_type: String,
     entity_id: i64, // This is actually the TMDB ID from the search
 ) -> Result<(), String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     // Get the inbox item to retrieve file info
     let item: InboxItem = sqlx::query_as(
@@ -106,9 +109,9 @@ pub async fn resolve_inbox_link(
                         }
 
                         // Cache images (best effort)
-                        if let Ok(cache_guard) = state.image_cache.read() {
+                        if let Some(cache) = state.image_cache.read().ok().map(|g| g.clone()) {
                             let _ = crate::modules::image_cache::cache_movie_images(
-                                pool, &*cache_guard, movie.id,
+                                pool, &cache, movie.id,
                             ).await;
                         }
 
@@ -135,9 +138,9 @@ pub async fn resolve_inbox_link(
                     pool, &match_result, &tmdb_client,
                 ).await {
                     Ok(series) => {
-                        if let Ok(cache_guard) = state.image_cache.read() {
+                        if let Some(cache) = state.image_cache.read().ok().map(|g| g.clone()) {
                             let _ = crate::modules::image_cache::cache_series_images(
-                                pool, &*cache_guard, series.id,
+                                pool, &cache, series.id,
                             ).await;
                         }
                         resolution_note = format!(
@@ -178,7 +181,8 @@ pub async fn resolve_inbox_ignore(
     state: State<'_, AppState>,
     inbox_id: i64,
 ) -> Result<(), String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     sqlx::query(
         "UPDATE inbox_items SET status = 'ignored',
@@ -200,7 +204,8 @@ pub async fn reopen_inbox_item(
     state: State<'_, AppState>,
     inbox_id: i64,
 ) -> Result<(), String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     sqlx::query(
         "UPDATE inbox_items SET status = 'pending', resolved_at = NULL,
@@ -221,7 +226,8 @@ pub async fn delete_inbox_item(
     state: State<'_, AppState>,
     inbox_id: i64,
 ) -> Result<bool, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
     let r = sqlx::query("DELETE FROM inbox_items WHERE id = ?")
         .bind(inbox_id)
         .execute(pool)

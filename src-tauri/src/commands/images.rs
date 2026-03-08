@@ -19,7 +19,8 @@ pub async fn get_image_paths(
     entity_id: i64,
     image_type: String,
 ) -> Result<Option<ImagePaths>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT path_thumb, path_medium, path_large FROM images

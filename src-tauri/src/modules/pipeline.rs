@@ -12,7 +12,7 @@ use sqlx::SqlitePool;
 
 use crate::db::{models, queries};
 use crate::modules::change_log::{self, ChangeSource};
-use crate::modules::filename_parser::{MediaType, ParsedFilename};
+use crate::modules::filename_parser::MediaType;
 use crate::modules::image_cache::ImageCache;
 use crate::modules::ingestion::ScannedFile;
 use crate::modules::tmdb::{self, MatchResult, TmdbClient};
@@ -125,7 +125,7 @@ async fn process_movie(
         Some(m) if m.confidence >= CONFIDENCE_THRESHOLD => {
             // High confidence — auto-match
             let movie = create_or_update_movie(pool, &m, tmdb_client).await?;
-            let version = create_media_version_and_file(
+            let _version = create_media_version_and_file(
                 pool, "movie", movie.id, library_id, file,
             ).await?;
 
@@ -145,7 +145,7 @@ async fn process_movie(
                 confidence: Some(m.confidence),
             })
         }
-        Some(m) => {
+        Some(_m) => {
             // Low confidence — send to inbox with candidates
             let candidates = search_results
                 .iter()
@@ -233,7 +233,7 @@ async fn process_episode(
                 confidence: Some(m.confidence),
             })
         }
-        Some(m) => {
+        Some(_m) => {
             // Low confidence — inbox
             let candidates = search_results
                 .iter()
@@ -649,7 +649,7 @@ async fn send_to_inbox(
     pool: &SqlitePool,
     file: &ScannedFile,
     category: &str,
-    entity_info: Option<(&str, i64)>,
+    _entity_info: Option<(&str, i64)>,
 ) -> Result<ProcessingResult> {
     send_to_inbox_with_candidates(pool, file, category, &[]).await
 }

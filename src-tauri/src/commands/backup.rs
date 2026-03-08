@@ -15,10 +15,9 @@ pub async fn create_backup(
         cache.root().to_path_buf()
     };
 
-    let out = std::path::Path::new(&output_path);
-
     // Run in blocking thread (ZIP creation is CPU + IO bound)
     tokio::task::spawn_blocking(move || {
+        let out = std::path::Path::new(&output_path);
         backup::create_backup(&db_path, &image_cache_root, out)
     })
     .await

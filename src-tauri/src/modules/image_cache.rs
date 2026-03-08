@@ -72,6 +72,7 @@ impl ImageType {
 // Cache manager
 // ============================================================================
 
+#[derive(Clone)]
 pub struct ImageCache {
     http: Client,
     cache_root: PathBuf,

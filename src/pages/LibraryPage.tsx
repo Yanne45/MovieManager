@@ -512,7 +512,6 @@ function GalleryView({
       {movies.map((m) => (
         <GalleryCard key={m.id} movie={m} onSelect={onSelect} />
       ))}
-      ))}
     </div>
   );
 }

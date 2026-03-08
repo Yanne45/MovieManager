@@ -23,7 +23,8 @@ pub async fn scan_library(
     state: State<'_, AppState>,
     library_id: i64,
 ) -> Result<ScanCommandResult, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let library = queries::get_library(pool, library_id)
         .await
@@ -66,7 +67,8 @@ pub async fn scan_and_match_library(
     state: State<'_, AppState>,
     library_id: i64,
 ) -> Result<Vec<ProcessingResult>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let library = queries::get_library(pool, library_id)
         .await
@@ -127,13 +129,13 @@ pub async fn scan_and_match_library(
 
     match tmdb_client {
         Some(client) => {
-            let cache_guard = state.image_cache.read().map_err(|e| e.to_string())?;
+            let cache = state.image_cache.read().map_err(|e| e.to_string())?.clone();
             let results = pipeline::process_scanned_files(
                 pool,
                 library_id,
                 &scanned_files,
                 &client,
-                Some(&*cache_guard),
+                Some(&cache),
             )
             .await
             .map_err(|e| e.to_string())?;
@@ -158,7 +160,8 @@ pub async fn import_dropped_paths(
     use crate::modules::ingestion;
     use std::path::Path;
 
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let mut total_found = 0usize;
     let mut movies = 0usize;

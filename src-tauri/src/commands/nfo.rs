@@ -45,7 +45,8 @@ pub async fn import_nfo_files(
     state: State<'_, AppState>,
     paths: Vec<String>,
 ) -> Result<NfoImportResult, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let mut result = NfoImportResult {
         total_files: paths.len(),

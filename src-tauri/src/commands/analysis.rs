@@ -10,7 +10,8 @@ pub async fn analyze_media_file(
     state: State<'_, AppState>,
     media_file_id: i64,
 ) -> Result<MediaAnalysis, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     // Get file path
     let (version_id, file_path): (i64, String) = sqlx::query_as(
@@ -33,7 +34,8 @@ pub async fn analyze_movie_files(
     state: State<'_, AppState>,
     movie_id: i64,
 ) -> Result<Vec<MediaAnalysis>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
     let versions = queries::get_movie_versions(pool, movie_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -64,7 +66,8 @@ pub async fn analyze_library(
     state: State<'_, AppState>,
     library_id: i64,
 ) -> Result<AnalyzeLibraryResult, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     // Find all media_files in this library where the version has no quality_score yet
     let unanalyzed: Vec<(i64, i64, String)> = sqlx::query_as(

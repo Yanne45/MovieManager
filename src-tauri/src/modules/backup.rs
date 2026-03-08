@@ -9,7 +9,7 @@ use anyhow::Result;
 use chrono::Utc;
 use serde::Serialize;
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;

@@ -19,7 +19,8 @@ pub async fn export_json(
     state: State<'_, AppState>,
     output_path: String,
 ) -> Result<ExportResult, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let movies = queries::export_movies(pool).await.map_err(|e| e.to_string())?;
     let series = queries::export_series(pool).await.map_err(|e| e.to_string())?;
@@ -49,7 +50,8 @@ pub async fn export_csv(
     state: State<'_, AppState>,
     output_dir: String,
 ) -> Result<ExportResult, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     let movies = queries::export_movies(pool).await.map_err(|e| e.to_string())?;
     let series = queries::export_series(pool).await.map_err(|e| e.to_string())?;

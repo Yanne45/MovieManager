@@ -10,7 +10,6 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "title": "MovieManager",
     "windows": [
       {
         "title": "MovieManager",
@@ -31,10 +30,7 @@
       "open": true
     },
     "fs": {
-      "scope": {
-        "allow": ["**"],
-        "deny": []
-      }
+      "requireLiteralLeadingDot": false
     }
   }
 }

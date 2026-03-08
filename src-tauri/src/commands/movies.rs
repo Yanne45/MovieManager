@@ -35,7 +35,8 @@ pub async fn update_movie(
     id: i64,
     input: UpdateMovie,
 ) -> Result<Option<Movie>, String> {
-    let pool = state.db().pool();
+    let db = state.db();
+    let pool = db.pool();
 
     // Get current state for change tracking
     let before = queries::get_movie(pool, id).await.map_err(|e| e.to_string())?;
