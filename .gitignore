@@ -25,6 +25,7 @@ pnpm-debug.log*
 # Tauri
 src-tauri/target/
 src-tauri/WixTools/
+src-tauri/gen/
 
 # Env / secrets
 .env

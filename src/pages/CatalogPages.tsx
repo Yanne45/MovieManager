@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback } from "react";
 import { SectionTitle, Tag as TagPill, EmptyState, UnderlineInput } from "../components/ui";
-import { usePersonMovies, useStudioMovies } from "../lib/hooks";
+import { usePersonMovies, useStudioMovies, useCollectionItems, useAddCollectionItem, useRemoveCollectionItem } from "../lib/hooks";
 import { tmdbImageUrl } from "../lib/api";
 import type { Person, StudioFull, PersonMovieRow, StudioMovieRow } from "../lib/api";
+import { SmartPoster } from "../components/SmartPoster";
 
 // ============================================================================
 // Re-export local types for Tags/Collections (used by App.tsx)
@@ -132,37 +133,19 @@ export function ActorsPage({ actors, searchQuery, onEditPerson }: ActorsPageProp
 
 function PersonDetailPanel({ person, onEdit }: { person: Person; onEdit?: () => void }) {
   const { data: filmography = [] } = usePersonMovies(person.id);
-  const photoUrl = tmdbImageUrl(person.photo_path, "w342");
 
   return (
     <div style={{ padding: 16 }}>
       {/* Photo */}
       <div style={{ textAlign: "center", marginBottom: 12 }}>
-        {photoUrl ? (
-          <img
-            src={photoUrl}
-            alt={person.name}
-            style={{ width: 120, height: 180, objectFit: "cover", borderRadius: 8 }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 120,
-              height: 180,
-              borderRadius: 8,
-              background: "var(--bg-surface-alt)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 32,
-              fontWeight: 600,
-              color: "var(--text-muted)",
-              margin: "0 auto",
-            }}
-          >
-            {person.name.split(" ").map((w) => w[0]?.toUpperCase()).join("").slice(0, 2)}
-          </div>
-        )}
+        <SmartPoster
+          entityType="person"
+          entityId={person.id}
+          title={person.name}
+          tmdbPosterPath={person.photo_path ?? null}
+          tmdbId={person.tmdb_id}
+          size="medium"
+        />
       </div>
 
       {/* Name */}
@@ -408,31 +391,14 @@ function StudioDetailPanel({ studio, onEdit }: { studio: StudioFull; onEdit?: ()
     <div style={{ padding: 16 }}>
       {/* Logo / Name */}
       <div style={{ textAlign: "center", marginBottom: 12 }}>
-        {studio.logo_path ? (
-          <img
-            src={tmdbImageUrl(studio.logo_path, "w342") ?? ""}
-            alt={studio.name}
-            style={{ maxWidth: 140, maxHeight: 60, objectFit: "contain" }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 8,
-              background: "var(--bg-surface-alt)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 24,
-              fontWeight: 600,
-              color: "var(--text-muted)",
-              margin: "0 auto",
-            }}
-          >
-            {studio.name.slice(0, 2).toUpperCase()}
-          </div>
-        )}
+        <SmartPoster
+          entityType="studio"
+          entityId={studio.id}
+          title={studio.name}
+          tmdbPosterPath={studio.logo_path ?? null}
+          tmdbId={studio.tmdb_id}
+          size="medium"
+        />
       </div>
 
       <div style={{ textAlign: "center", fontSize: 15, fontWeight: 600, marginBottom: 2 }}>
@@ -614,66 +580,485 @@ export function TagsPage({ tags, onCreateTag, onDeleteTag }: TagsPageProps) {
 
 interface CollectionsPageProps {
   collections: CollectionItem[];
-  onSelect?: (id: number) => void;
-  onCreate?: () => void;
+  movieIndex?: Record<number, string>;
+  seriesIndex?: Record<number, string>;
+  onCreateCollection?: (name: string, description?: string) => void;
+  onDeleteCollection?: (id: number) => void;
 }
 
-export function CollectionsPage({ collections, onSelect, onCreate }: CollectionsPageProps) {
+export function CollectionsPage({
+  collections,
+  movieIndex = {},
+  seriesIndex = {},
+  onCreateCollection,
+  onDeleteCollection,
+}: CollectionsPageProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+
+  const addItem = useAddCollectionItem();
+  const removeItem = useRemoveCollectionItem();
+
+  const selected = useMemo(
+    () => collections.find((c) => c.id === selectedId) ?? null,
+    [collections, selectedId]
+  );
+
+  const handleClick = useCallback((c: CollectionItem) => {
+    setSelectedId((prev) => (prev === c.id ? null : c.id));
+  }, []);
+
+  const handleCreate = () => {
+    if (!newName.trim()) return;
+    onCreateCollection?.(newName.trim(), newDesc.trim() || undefined);
+    setNewName("");
+    setNewDesc("");
+    setShowCreate(false);
+  };
+
+  const handleCancelCreate = () => {
+    setShowCreate(false);
+    setNewName("");
+    setNewDesc("");
+  };
+
+  const btnStyle = {
+    padding: "6px 14px",
+    borderRadius: 6,
+    border: "none",
+    background: "var(--color-primary)",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  } as const;
+
+  const btnSecondaryStyle = {
+    padding: "6px 14px",
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    background: "var(--bg-surface-alt)",
+    color: "var(--text-main)",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+  } as const;
+
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-        <SectionTitle>Collections</SectionTitle>
-        <button
-          onClick={onCreate}
+    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+      {/* Left: grid */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <SectionTitle>Collections ({collections.length})</SectionTitle>
+          <button style={btnStyle} onClick={() => setShowCreate((v) => !v)}>
+            + Nouvelle collection
+          </button>
+        </div>
+
+        {/* Inline create form */}
+        {showCreate && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 16,
+              border: "1px solid var(--color-primary)",
+              borderRadius: 8,
+              background: "var(--bg-surface)",
+            }}
+          >
+            <div style={{ marginBottom: 10 }}>
+              <UnderlineInput label="Nom *" value={newName} onChange={setNewName} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <UnderlineInput label="Description (optionnel)" value={newDesc} onChange={setNewDesc} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={btnStyle} onClick={handleCreate}>
+                Créer
+              </button>
+              <button style={btnSecondaryStyle} onClick={handleCancelCreate}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Grid */}
+        <div
           style={{
-            padding: "6px 14px",
-            borderRadius: 6,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {collections.map((c) => (
+            <div
+              key={c.id}
+              onClick={() => handleClick(c)}
+              style={{
+                padding: 16,
+                borderRadius: 8,
+                border: `1px solid ${selectedId === c.id ? "var(--color-primary)" : "var(--border)"}`,
+                background: selectedId === c.id ? "var(--bg-surface-alt)" : "var(--bg-surface)",
+                cursor: "pointer",
+                transition: "border-color 0.15s, background 0.15s",
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
+              {c.description && (
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, lineHeight: 1.4 }}>
+                  {c.description}
+                </p>
+              )}
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                {c.item_count} élément{c.item_count !== 1 ? "s" : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {collections.length === 0 && !showCreate && (
+          <EmptyState message="Aucune collection — créez-en une pour organiser votre catalogue" />
+        )}
+      </div>
+
+      {/* Right: sliding detail panel */}
+      <div
+        style={{
+          width: 340,
+          flexShrink: 0,
+          borderLeft: "1px solid var(--border)",
+          background: "var(--bg-surface)",
+          overflowY: "auto",
+          marginRight: selected ? 0 : -340,
+          opacity: selected ? 1 : 0,
+          transition: "margin-right 0.25s ease, opacity 0.2s ease",
+        }}
+      >
+        {selected && (
+          <CollectionDetailPanel
+            collection={selected}
+            movieIndex={movieIndex}
+            seriesIndex={seriesIndex}
+            onAddItem={(movieId, seriesId) =>
+              addItem.mutate({ collectionId: selected.id, movieId, seriesId })
+            }
+            onRemoveItem={(itemId) =>
+              removeItem.mutate({ itemId, collectionId: selected.id })
+            }
+            onClose={() => setSelectedId(null)}
+            onDelete={onDeleteCollection ? () => { onDeleteCollection(selected.id); setSelectedId(null); } : undefined}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Collection Detail Panel ──
+
+function CollectionDetailPanel({
+  collection,
+  movieIndex,
+  seriesIndex,
+  onAddItem,
+  onRemoveItem,
+  onClose,
+  onDelete,
+}: {
+  collection: CollectionItem;
+  movieIndex: Record<number, string>;
+  seriesIndex: Record<number, string>;
+  onAddItem?: (movieId?: number, seriesId?: number) => void;
+  onRemoveItem?: (itemId: number) => void;
+  onClose?: () => void;
+  onDelete?: () => void;
+}) {
+  const { data: items = [], isLoading } = useCollectionItems(collection.id);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+
+  // IDs already in collection (to avoid duplicates)
+  const addedMovieIds = useMemo(() => new Set(items.map((i) => i.movie_id).filter(Boolean)), [items]);
+  const addedSeriesIds = useMemo(() => new Set(items.map((i) => i.series_id).filter(Boolean)), [items]);
+
+  // Search results: mix movies + series, filtered by query
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const movies = Object.entries(movieIndex)
+      .filter(([id, title]) => !addedMovieIds.has(Number(id)) && title.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map(([id, title]) => ({ id: Number(id), title, type: "movie" as const }));
+    const series = Object.entries(seriesIndex)
+      .filter(([id, title]) => !addedSeriesIds.has(Number(id)) && title.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map(([id, title]) => ({ id: Number(id), title, type: "series" as const }));
+    return [...movies, ...series].slice(0, 8);
+  }, [searchQuery, movieIndex, seriesIndex, addedMovieIds, addedSeriesIds]);
+
+  const handleAdd = (result: { id: number; type: "movie" | "series" }) => {
+    if (result.type === "movie") onAddItem?.(result.id, undefined);
+    else onAddItem?.(undefined, result.id);
+    setSearchQuery("");
+    setShowSearch(false);
+  };
+
+  return (
+    <div style={{ padding: 16 }}>
+      {/* Close button */}
+      {onClose && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+          <button
+            onClick={onClose}
+            title="Fermer"
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              fontSize: 18,
+              lineHeight: 1,
+              padding: "2px 4px",
+              borderRadius: 4,
+            }}
+          >
+            ›
+          </button>
+        </div>
+      )}
+
+      {/* Icon */}
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: 12,
+            background: "var(--bg-surface-alt)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 28,
+            color: "var(--color-primary)",
+            margin: "0 auto",
+          }}
+        >
+          ☰
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+        {collection.name}
+      </div>
+      <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
+        {collection.item_count} élément{collection.item_count !== 1 ? "s" : ""}
+      </div>
+
+      {collection.description && (
+        <div style={{ marginBottom: 14 }}>
+          <SectionTitle>Description</SectionTitle>
+          <p style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5, marginTop: 4 }}>
+            {collection.description}
+          </p>
+        </div>
+      )}
+
+      {/* Content section */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <SectionTitle>Contenu</SectionTitle>
+        <button
+          onClick={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
+          style={{
+            padding: "3px 10px",
+            borderRadius: 5,
             border: "none",
             background: "var(--color-primary)",
             color: "#fff",
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 600,
             cursor: "pointer",
           }}
         >
-          + Nouvelle collection
+          + Ajouter
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-          gap: 12,
-        }}
-      >
-        {collections.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => onSelect?.(c.id)}
+      {/* Inline search to add items */}
+      {showSearch && (
+        <div style={{ marginBottom: 10 }}>
+          <input
+            autoFocus
+            type="text"
+            placeholder="Rechercher un film ou une série…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             style={{
-              padding: 16,
-              borderRadius: 8,
-              border: "1px solid var(--border)",
-              background: "var(--bg-surface)",
+              width: "100%",
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid var(--color-primary)",
+              background: "var(--bg-surface-alt)",
+              color: "var(--text-main)",
+              fontSize: 12,
+              boxSizing: "border-box",
+              outline: "none",
+            }}
+          />
+          {searchResults.length > 0 && (
+            <div
+              style={{
+                marginTop: 4,
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                overflow: "hidden",
+              }}
+            >
+              {searchResults.map((r) => (
+                <div
+                  key={`${r.type}-${r.id}`}
+                  onClick={() => handleAdd(r)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    background: "var(--bg-surface)",
+                    borderBottom: "1px solid var(--border)",
+                    fontSize: 12,
+                    gap: 8,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-alt)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
+                >
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.title}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      padding: "2px 5px",
+                      borderRadius: 4,
+                      background: r.type === "movie" ? "var(--color-primary)" : "#8B5CF6",
+                      color: "#fff",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {r.type === "movie" ? "Film" : "Série"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {searchQuery.trim() && searchResults.length === 0 && (
+            <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>
+              Aucun résultat
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Items list */}
+      <div>
+        {isLoading && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", paddingTop: 8 }}>Chargement…</div>
+        )}
+        {!isLoading && items.length === 0 && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", paddingTop: 4 }}>
+            Collection vide — utilisez "+ Ajouter" pour y ajouter des films ou séries
+          </div>
+        )}
+        {items.map((item) => {
+          const isMovie = item.movie_id != null;
+          const id = (item.movie_id ?? item.series_id)!;
+          const title = isMovie ? (movieIndex[id] ?? `Film #${id}`) : (seriesIndex[id] ?? `Série #${id}`);
+          return (
+            <div
+              key={item.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 8px",
+                marginBottom: 4,
+                borderRadius: 6,
+                background: "var(--bg-surface-alt)",
+              }}
+            >
+              <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 16, textAlign: "center" }}>
+                {item.position + 1}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {title}
+                </div>
+                {item.notes && (
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{item.notes}</div>
+                )}
+              </div>
+              <span
+                style={{
+                  fontSize: 9,
+                  padding: "2px 5px",
+                  borderRadius: 4,
+                  background: isMovie ? "var(--color-primary)" : "#8B5CF6",
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
+              >
+                {isMovie ? "Film" : "Série"}
+              </span>
+              <button
+                onClick={() => onRemoveItem?.(item.id)}
+                title="Retirer de la collection"
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: "0 2px",
+                  flexShrink: 0,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Delete collection button */}
+      {onDelete && (
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button
+            onClick={onDelete}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: "1px solid var(--color-danger, #ef4444)",
+              background: "transparent",
+              color: "var(--color-danger, #ef4444)",
+              fontSize: 11,
+              fontWeight: 500,
               cursor: "pointer",
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
-            {c.description && (
-              <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, lineHeight: 1.4 }}>
-                {c.description}
-              </p>
-            )}
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              {c.item_count} élément{c.item_count !== 1 ? "s" : ""}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {collections.length === 0 && (
-        <EmptyState message="Aucune collection — créez-en une pour organiser votre catalogue" />
+            Supprimer la collection
+          </button>
+        </div>
       )}
     </div>
   );

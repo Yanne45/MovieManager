@@ -55,6 +55,7 @@ pub enum ImageType {
     Backdrop,
     Still,
     Photo,
+    Logo,
 }
 
 impl ImageType {
@@ -64,6 +65,17 @@ impl ImageType {
             ImageType::Backdrop => "backdrops",
             ImageType::Still => "stills",
             ImageType::Photo => "photos",
+            ImageType::Logo => "logos",
+        }
+    }
+
+    pub fn db_name(&self) -> &str {
+        match self {
+            ImageType::Poster => "poster",
+            ImageType::Backdrop => "backdrop",
+            ImageType::Still => "still",
+            ImageType::Photo => "photo",
+            ImageType::Logo => "logo",
         }
     }
 }
@@ -94,7 +106,10 @@ impl ImageCache {
 
     /// Ensure all cache subdirectories exist
     pub fn ensure_dirs(&self) -> Result<()> {
-        for img_type in &[ImageType::Poster, ImageType::Backdrop, ImageType::Still, ImageType::Photo] {
+        for img_type in &[
+            ImageType::Poster, ImageType::Backdrop,
+            ImageType::Still, ImageType::Photo, ImageType::Logo,
+        ] {
             for size in ImageSize::all() {
                 let dir = self.cache_root
                     .join(img_type.dir_name())
@@ -103,7 +118,40 @@ impl ImageCache {
                     .with_context(|| format!("Failed to create cache dir: {:?}", dir))?;
             }
         }
+        // User-uploaded images directory (single copy, no resize)
+        std::fs::create_dir_all(self.cache_root.join("user"))
+            .with_context(|| "Failed to create user image dir")?;
         Ok(())
+    }
+
+    /// Copy a local image file into the cache and return relative paths.
+    /// The image is stored in `user/{entity_type}_{entity_id}_{image_type}{ext}`.
+    /// All three size fields point to the same file (no resizing).
+    pub fn copy_local_image(
+        &self,
+        source_path: &Path,
+        entity_type: &str,
+        entity_id: i64,
+        image_type: &str,
+    ) -> Result<CachedImage> {
+        let ext = source_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg");
+
+        let dest_name = format!("{}_{}_{}.{}", entity_type, entity_id, image_type, ext);
+        let dest_path = self.cache_root.join("user").join(&dest_name);
+
+        std::fs::copy(source_path, &dest_path)
+            .with_context(|| format!("Failed to copy image to {:?}", dest_path))?;
+
+        let rel = format!("user/{}", dest_name);
+        Ok(CachedImage {
+            tmdb_path: String::new(), // no TMDB source
+            thumbnail: Some(rel.clone()),
+            medium: Some(rel.clone()),
+            large: Some(rel),
+        })
     }
 
     /// Download a TMDB image in all 3 sizes and return local paths
@@ -282,6 +330,46 @@ pub async fn cache_series_images(
         }
     }
 
+    Ok(())
+}
+
+/// Cache the photo for a person
+pub async fn cache_person_images(
+    pool: &SqlitePool,
+    cache: &ImageCache,
+    person_id: i64,
+) -> Result<()> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        "SELECT photo_path FROM people WHERE id = ?"
+    )
+    .bind(person_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((Some(photo_path),)) = row {
+        let cached = cache.download_image(&photo_path, ImageType::Photo).await?;
+        save_image_record(pool, "person", person_id, "photo", &cached).await?;
+    }
+    Ok(())
+}
+
+/// Cache the logo for a studio
+pub async fn cache_studio_images(
+    pool: &SqlitePool,
+    cache: &ImageCache,
+    studio_id: i64,
+) -> Result<()> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        "SELECT logo_path FROM studios WHERE id = ?"
+    )
+    .bind(studio_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((Some(logo_path),)) = row {
+        let cached = cache.download_image(&logo_path, ImageType::Logo).await?;
+        save_image_record(pool, "studio", studio_id, "logo", &cached).await?;
+    }
     Ok(())
 }
 

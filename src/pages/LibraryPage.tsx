@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ScoreBadge, SectionTitle } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
 import type { Movie } from "../lib/api";
@@ -9,6 +9,10 @@ import { useMovieVersions, useMoviePeople, useSimilarMovies } from "../lib/hooks
 import { useMovieGenres } from "../lib/hooks";
 import type { ActiveFilters } from "../components/FilterBar";
 
+interface CollectionRef { id: number; name: string; }
+
+interface ContextMenuState { x: number; y: number; movieIds: number[]; }
+
 interface LibraryPageProps {
   movies: Movie[];
   viewMode: "table" | "gallery";
@@ -17,10 +21,35 @@ interface LibraryPageProps {
   filters?: ActiveFilters;
   onEditMovie?: (movie: Movie) => void;
   onFocusSearch?: () => void;
+  collections?: CollectionRef[];
+  onAddToCollection?: (movieId: number, collectionId: number) => void;
 }
 
-export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onFocusSearch }: LibraryPageProps) {
+export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onFocusSearch, collections = [], onAddToCollection }: LibraryPageProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [multiSelect, setMultiSelect] = useState<Set<number>>(new Set());
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const handleMultiToggle = useCallback((movieId: number) => {
+    setMultiSelect((prev) => {
+      const next = new Set(prev);
+      if (next.has(movieId)) next.delete(movieId);
+      else next.add(movieId);
+      return next;
+    });
+  }, []);
+
+  const clearMultiSelect = useCallback(() => setMultiSelect(new Set()), []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, movieId: number) => {
+    e.preventDefault();
+    if (!collections.length) return;
+    // If right-clicking a multi-selected movie, operate on all selected
+    const ids = multiSelect.has(movieId) && multiSelect.size > 1
+      ? Array.from(multiSelect)
+      : [movieId];
+    setContextMenu({ x: e.clientX, y: e.clientY, movieIds: ids });
+  }, [collections.length, multiSelect]);
 
   const filtered = useMemo(() => {
     let result = movies;
@@ -79,18 +108,62 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
       if (selected && onEditMovie) onEditMovie(selected);
     }, [selected, onEditMovie]),
     onSearch: onFocusSearch,
-    onEscape: useCallback(() => setSelectedId(null), []),
+    onEscape: useCallback(() => { setSelectedId(null); clearMultiSelect(); }, [clearMultiSelect]),
   });
 
+  const handleAddBatch = useCallback((collectionId: number) => {
+    for (const movieId of multiSelect) {
+      onAddToCollection?.(movieId, collectionId);
+    }
+    clearMultiSelect();
+  }, [multiSelect, onAddToCollection, clearMultiSelect]);
+
   if (viewMode === "gallery") {
-    return <GalleryView movies={filtered} onSelect={setSelectedId} />;
+    return (
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <GalleryView
+          movies={filtered}
+          onSelect={setSelectedId}
+          onContextMenu={handleContextMenu}
+          multiSelect={multiSelect}
+          onMultiToggle={handleMultiToggle}
+        />
+        {multiSelect.size > 0 && (
+          <SelectionBar
+            count={multiSelect.size}
+            collections={collections}
+            onAddToCollection={handleAddBatch}
+            onClear={clearMultiSelect}
+          />
+        )}
+        {contextMenu && (
+          <ContextMenu
+            {...contextMenu}
+            collections={collections}
+            onAdd={(collectionId) => {
+              contextMenu.movieIds.forEach((id) => onAddToCollection?.(id, collectionId));
+              setContextMenu(null);
+            }}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
       {/* Table */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <MovieTable movies={filtered} selectedId={selectedId} onSelect={setSelectedId} compact={compact} />
+        <MovieTable
+          movies={filtered}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          compact={compact}
+          onContextMenu={handleContextMenu}
+          multiSelect={multiSelect}
+          onMultiToggle={handleMultiToggle}
+        />
       </div>
 
       {/* Sliding detail panel */}
@@ -108,6 +181,27 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
       >
         {selected && <MovieDetailPanel movie={selected} />}
       </div>
+
+      {multiSelect.size > 0 && (
+        <SelectionBar
+          count={multiSelect.size}
+          collections={collections}
+          onAddToCollection={handleAddBatch}
+          onClear={clearMultiSelect}
+        />
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          {...contextMenu}
+          collections={collections}
+          onAdd={(collectionId) => {
+            contextMenu.movieIds.forEach((id) => onAddToCollection?.(id, collectionId));
+            setContextMenu(null);
+          }}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
@@ -121,11 +215,17 @@ function MovieTable({
   selectedId,
   onSelect,
   compact = false,
+  onContextMenu,
+  multiSelect = new Set(),
+  onMultiToggle,
 }: {
   movies: Movie[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   compact?: boolean;
+  onContextMenu?: (e: React.MouseEvent, movieId: number) => void;
+  multiSelect?: Set<number>;
+  onMultiToggle?: (id: number) => void;
 }) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -165,15 +265,23 @@ function MovieTable({
           return (
             <tr
               key={m.id}
-              onClick={() => onSelect(m.id)}
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) { onMultiToggle?.(m.id); }
+                else { onSelect(m.id); }
+              }}
+              onContextMenu={(e) => onContextMenu?.(e, m.id)}
               style={{
                 cursor: "pointer",
-                background: isSelected
-                  ? "var(--color-primary-soft)"
-                  : i % 2 === 0
-                    ? "var(--bg-surface)"
-                    : "#F8F9FC",
+                background: multiSelect.has(m.id)
+                  ? "#FEF9C3"
+                  : isSelected
+                    ? "var(--color-primary-soft)"
+                    : i % 2 === 0
+                      ? "var(--bg-surface)"
+                      : "#F8F9FC",
                 transition: "background 0.1s",
+                outline: multiSelect.has(m.id) ? "2px solid #F59E0B" : undefined,
+                outlineOffset: -2,
               }}
               onMouseEnter={(e) => {
                 if (!isSelected) e.currentTarget.style.background = "#F1F5FF";
@@ -516,9 +624,15 @@ function VersionCard({ version: v }: { version: import("../lib/api").MediaVersio
 function GalleryView({
   movies,
   onSelect,
+  onContextMenu,
+  multiSelect = new Set(),
+  onMultiToggle,
 }: {
   movies: Movie[];
   onSelect: (id: number) => void;
+  onContextMenu?: (e: React.MouseEvent, movieId: number) => void;
+  multiSelect?: Set<number>;
+  onMultiToggle?: (id: number) => void;
 }) {
   return (
     <div
@@ -533,7 +647,14 @@ function GalleryView({
       }}
     >
       {movies.map((m) => (
-        <GalleryCard key={m.id} movie={m} onSelect={onSelect} />
+        <GalleryCard
+          key={m.id}
+          movie={m}
+          onSelect={onSelect}
+          onContextMenu={onContextMenu}
+          isMultiSelected={multiSelect.has(m.id)}
+          onMultiToggle={onMultiToggle}
+        />
       ))}
     </div>
   );
@@ -543,13 +664,29 @@ function GalleryView({
 // Gallery Card (with smart poster)
 // ============================================================================
 
-function GalleryCard({ movie: m, onSelect }: { movie: Movie; onSelect: (id: number) => void }) {
+function GalleryCard({
+  movie: m,
+  onSelect,
+  onContextMenu,
+  isMultiSelected = false,
+  onMultiToggle,
+}: {
+  movie: Movie;
+  onSelect: (id: number) => void;
+  onContextMenu?: (e: React.MouseEvent, movieId: number) => void;
+  isMultiSelected?: boolean;
+  onMultiToggle?: (id: number) => void;
+}) {
   const cachedUrl = useImage("movie", m.id, "poster", "medium");
   const posterSrc = cachedUrl || tmdbImageUrl(m.poster_path, "w342");
 
   return (
     <div
-      onClick={() => onSelect(m.id)}
+      onClick={(e) => {
+        if (e.ctrlKey || e.metaKey) onMultiToggle?.(m.id);
+        else onSelect(m.id);
+      }}
+      onContextMenu={(e) => onContextMenu?.(e, m.id)}
       style={{ cursor: "pointer", textAlign: "center" }}
     >
       <div
@@ -560,8 +697,28 @@ function GalleryCard({ movie: m, onSelect }: { movie: Movie; onSelect: (id: numb
           borderRadius: 6,
           overflow: "hidden",
           background: "var(--bg-surface-alt)",
+          outline: isMultiSelected ? "3px solid #F59E0B" : undefined,
+          outlineOffset: 2,
         }}
       >
+        {isMultiSelected && (
+          <div style={{
+            position: "absolute",
+            top: 6,
+            left: 6,
+            width: 18,
+            height: 18,
+            borderRadius: "50%",
+            background: "#F59E0B",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2,
+            fontSize: 11,
+            color: "#fff",
+            fontWeight: 700,
+          }}>✓</div>
+        )}
         {posterSrc ? (
           <img
             src={posterSrc}
@@ -610,6 +767,244 @@ function GalleryCard({ movie: m, onSelect }: { movie: Movie; onSelect: (id: numb
         {m.title}
       </p>
       <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{m.year}</p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Selection Bar (floating action bar for multi-select)
+// ============================================================================
+
+function SelectionBar({
+  count,
+  collections,
+  onAddToCollection,
+  onClear,
+}: {
+  count: number;
+  collections: CollectionRef[];
+  onAddToCollection: (collectionId: number) => void;
+  onClear: () => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+        setShowPicker(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showPicker]);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 16,
+        left: "50%",
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 20px",
+        background: "var(--color-primary)",
+        color: "#fff",
+        borderRadius: 28,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+        zIndex: 200,
+        fontSize: 13,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ fontWeight: 600 }}>
+        {count} film{count > 1 ? "s" : ""} sélectionné{count > 1 ? "s" : ""}
+      </span>
+
+      <div style={{ position: "relative" }} ref={pickerRef}>
+        <button
+          onClick={() => setShowPicker((v) => !v)}
+          style={{
+            padding: "5px 14px",
+            borderRadius: 14,
+            border: "1px solid rgba(255,255,255,0.4)",
+            background: "rgba(255,255,255,0.18)",
+            color: "#fff",
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          Ajouter à une collection ▾
+        </button>
+
+        {showPicker && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 8px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              overflow: "hidden",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+              minWidth: 200,
+              zIndex: 201,
+            }}
+          >
+            <div
+              style={{
+                padding: "7px 12px 5px",
+                fontSize: 10,
+                fontWeight: 600,
+                color: "var(--text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              Choisir une collection
+            </div>
+            {collections.length === 0 && (
+              <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted)" }}>
+                Aucune collection
+              </div>
+            )}
+            {collections.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => { onAddToCollection(c.id); setShowPicker(false); }}
+                style={{
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  color: "var(--text-main)",
+                  fontSize: 13,
+                  borderBottom: "1px solid var(--border)",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-alt)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                {c.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={onClear}
+        title="Désélectionner tout"
+        style={{
+          border: "none",
+          background: "transparent",
+          color: "rgba(255,255,255,0.8)",
+          cursor: "pointer",
+          fontSize: 18,
+          lineHeight: 1,
+          padding: "0 2px",
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// Context Menu
+// ============================================================================
+
+function ContextMenu({
+  x,
+  y,
+  movieIds,
+  collections,
+  onAdd,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  movieIds: number[];
+  collections: CollectionRef[];
+  onAdd: (collectionId: number) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on click outside or Escape
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [onClose]);
+
+  // Keep menu within viewport
+  const menuWidth = 220;
+  const left = x + menuWidth > window.innerWidth ? x - menuWidth : x;
+  const top = y;
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "fixed",
+        left,
+        top,
+        width: menuWidth,
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+        zIndex: 9999,
+        overflow: "hidden",
+        fontSize: 12,
+      }}
+    >
+      <div
+        style={{
+          padding: "8px 12px 6px",
+          fontSize: 10,
+          fontWeight: 600,
+          color: "var(--text-muted)",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        {movieIds.length > 1 ? `Ajouter ${movieIds.length} films à` : "Ajouter à une collection"}
+      </div>
+      {collections.length === 0 && (
+        <div style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: 11 }}>
+          Aucune collection
+        </div>
+      )}
+      {collections.map((c) => (
+        <div
+          key={c.id}
+          onClick={() => onAdd(c.id)}
+          style={{
+            padding: "7px 12px",
+            cursor: "pointer",
+            color: "var(--text-main)",
+            borderBottom: "1px solid var(--border)",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-alt)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          {c.name}
+        </div>
+      ))}
     </div>
   );
 }

@@ -191,6 +191,8 @@ pub fn run() {
             commands::scan::scan_library,
             commands::scan::scan_and_match_library,
             commands::scan::import_dropped_paths,
+            commands::scan::preview_scan_paths,
+            commands::scan::import_files,
             // TMDB commands
             commands::tmdb::search_movie_tmdb,
             commands::tmdb::search_series_tmdb,
@@ -220,6 +222,12 @@ pub fn run() {
             // Image commands
             commands::images::get_image_paths,
             commands::images::get_image_cache_root,
+            commands::images::import_local_image,
+            commands::images::refresh_entity_images,
+            commands::images::purge_orphaned_images,
+            commands::images::get_tmdb_image_candidates,
+            commands::images::apply_tmdb_image,
+            commands::images::delete_entity_image,
             // People commands
             commands::people::get_people,
             commands::people::get_person,

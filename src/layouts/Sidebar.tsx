@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 ];
 
 const TOOL_ITEMS = [
+  { id: "import", label: "Importer" },
   { id: "suggestions", label: "Suggestions" },
   { id: "stats", label: "Statistiques" },
   { id: "settings", label: "Paramètres" },

@@ -234,6 +234,40 @@ impl TmdbClient {
 
         Ok(detail)
     }
+
+    // ========================================================================
+    // Image list endpoints
+    // ========================================================================
+
+    /// List available posters/backdrops for a movie
+    pub async fn get_movie_images(&self, tmdb_id: i64) -> Result<TmdbImageList> {
+        let url = self.url(&format!("/movie/{}/images", tmdb_id));
+        let list: TmdbImageList = self.http.get(&url).send().await
+            .context("TMDB get_movie_images failed")?
+            .json().await
+            .context("TMDB get_movie_images parse failed")?;
+        Ok(list)
+    }
+
+    /// List available posters/backdrops for a TV series
+    pub async fn get_series_images(&self, tmdb_id: i64) -> Result<TmdbImageList> {
+        let url = self.url(&format!("/tv/{}/images", tmdb_id));
+        let list: TmdbImageList = self.http.get(&url).send().await
+            .context("TMDB get_series_images failed")?
+            .json().await
+            .context("TMDB get_series_images parse failed")?;
+        Ok(list)
+    }
+
+    /// List available profile photos for a person
+    pub async fn get_person_images(&self, tmdb_id: i64) -> Result<TmdbPersonImageList> {
+        let url = self.url(&format!("/person/{}/images", tmdb_id));
+        let list: TmdbPersonImageList = self.http.get(&url).send().await
+            .context("TMDB get_person_images failed")?
+            .json().await
+            .context("TMDB get_person_images parse failed")?;
+        Ok(list)
+    }
 }
 
 // ============================================================================
@@ -678,6 +712,42 @@ pub fn map_series_status(tmdb_status: &str) -> &'static str {
         "Canceled" | "Cancelled" => "cancelled",
         _ => "ongoing",
     }
+}
+
+// ============================================================================
+// Image list types
+// ============================================================================
+
+/// An individual image entry from TMDB
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TmdbImageEntry {
+    pub file_path: String,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub vote_average: Option<f64>,
+    pub vote_count: Option<i64>,
+    /// ISO 639-1 language code or null for language-neutral
+    pub iso_639_1: Option<String>,
+}
+
+/// Image list response for movies and series
+#[derive(Debug, Deserialize)]
+pub struct TmdbImageList {
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub posters: Vec<TmdbImageEntry>,
+    #[serde(default)]
+    pub backdrops: Vec<TmdbImageEntry>,
+    #[serde(default)]
+    pub logos: Vec<TmdbImageEntry>,
+}
+
+/// Image list response for people
+#[derive(Debug, Deserialize)]
+pub struct TmdbPersonImageList {
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub profiles: Vec<TmdbImageEntry>,
 }
 
 // ============================================================================

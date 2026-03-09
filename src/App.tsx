@@ -15,6 +15,7 @@ import { EditPersonPage } from "./pages/EditPersonPage";
 import { EditStudioPage } from "./pages/EditStudioPage";
 import { DuplicatesPage } from "./pages/DuplicatesPage";
 import { SuggestionsPage } from "./pages/SuggestionsPage";
+import { ImportPage } from "./pages/ImportPage";
 import { DropZone } from "./components/DropZone";
 import { LoadingSpinner, ErrorPanel } from "./components/ui";
 import { FilterBar, type ActiveFilters, EMPTY_FILTERS } from "./components/FilterBar";
@@ -52,6 +53,9 @@ import {
   usePeople,
   useStudios,
   useCollections,
+  useCreateCollection,
+  useDeleteCollection,
+  useAddCollectionItem,
   useGenres,
 } from "./lib/hooks";
 
@@ -99,6 +103,7 @@ const PAGE_TITLES: Record<string, string> = {
 function AppInner() {
   const { toast } = useToast();
   const [page, setPage] = useState("library");
+  const [importInitialPaths, setImportInitialPaths] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "gallery">("table");
   const [compactTable, setCompactTable] = useState(false);
@@ -152,6 +157,9 @@ function AppInner() {
   const resolveInboxIgnore = useResolveInboxIgnore();
   const createTag = useCreateTag();
   const deleteTag = useDeleteTag();
+  const createCollection = useCreateCollection();
+  const deleteCollection = useDeleteCollection();
+  const addCollectionItem = useAddCollectionItem();
 
   // ── Theme ──
   useEffect(() => {
@@ -268,16 +276,13 @@ function AppInner() {
       });
       if (selected) {
         const paths = Array.isArray(selected) ? selected : [selected];
-        importDropped.mutate(paths, {
-          onSuccess: (result) =>
-            toast(`${result.files_found} fichiers détectés`, "success"),
-          onError: (err) => toast(`Erreur : ${err}`, "error"),
-        });
+        setImportInitialPaths(paths);
+        setPage("import");
       }
     } catch (e) {
       console.error("Dialog error:", e);
     }
-  }, [importDropped, toast]);
+  }, []);
 
   const handleAddLibrary = useCallback(async () => {
     try {
@@ -376,6 +381,40 @@ function AppInner() {
       });
     },
     [deleteTag, toast]
+  );
+
+  // Collections
+  const handleCreateCollection = useCallback(
+    (name: string, description?: string) => {
+      createCollection.mutate({ name, description }, {
+        onSuccess: () => toast(`Collection "${name}" créée`, "success"),
+        onError: (err) => toast(`Erreur : ${err}`, "error"),
+      });
+    },
+    [createCollection, toast]
+  );
+
+  const handleDeleteCollection = useCallback(
+    (id: number) => {
+      deleteCollection.mutate(id, {
+        onSuccess: () => toast("Collection supprimée", "success"),
+        onError: (err) => toast(`Erreur : ${err}`, "error"),
+      });
+    },
+    [deleteCollection, toast]
+  );
+
+  const handleAddMovieToCollection = useCallback(
+    (movieId: number, collectionId: number) => {
+      addCollectionItem.mutate({ collectionId, movieId }, {
+        onSuccess: () => {
+          const name = collectionsQuery.data?.find((c) => c.id === collectionId)?.name ?? "collection";
+          toast(`Film ajouté à "${name}"`, "success");
+        },
+        onError: (err) => toast(`Erreur : ${err}`, "error"),
+      });
+    },
+    [addCollectionItem, collectionsQuery.data, toast]
   );
 
   // Settings
@@ -543,6 +582,8 @@ function AppInner() {
                   filters={filters}
                   onEditMovie={handleEditMovie}
                   onFocusSearch={() => searchRef.current?.focus()}
+                  collections={collectionsQuery.data?.map((c) => ({ id: c.id, name: c.name })) ?? []}
+                  onAddToCollection={handleAddMovieToCollection}
                 />,
                 "Chargement de la bibliothèque…"
               )}
@@ -649,7 +690,13 @@ function AppInner() {
 
             {page === "collections" &&
               withLoadingError(collectionsQuery,
-                <CollectionsPage collections={collectionsQuery.data ?? []} />,
+                <CollectionsPage
+                  collections={collectionsQuery.data ?? []}
+                  movieIndex={Object.fromEntries(movies.map((m) => [m.id, m.title]))}
+                  seriesIndex={Object.fromEntries(seriesList.map((s) => [s.id, s.title]))}
+                  onCreateCollection={handleCreateCollection}
+                  onDeleteCollection={handleDeleteCollection}
+                />,
                 "Chargement des collections…"
               )}
 
@@ -677,6 +724,12 @@ function AppInner() {
             {page === "stats" && <StatsPage />}
             {page === "duplicates" && <DuplicatesPage />}
             {page === "suggestions" && <SuggestionsPage />}
+            {page === "import" && (
+              <ImportPage
+                initialPaths={importInitialPaths}
+                onPathsConsumed={() => setImportInitialPaths([])}
+              />
+            )}
 
             {page === "settings" &&
               withLoadingError(librariesQuery,

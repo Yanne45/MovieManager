@@ -664,8 +664,21 @@ export function useAddCollectionItem() {
   return useMutation({
     mutationFn: ({ collectionId, movieId, seriesId }: { collectionId: number; movieId?: number; seriesId?: number }) =>
       api.addCollectionItem(collectionId, movieId, seriesId),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: queryKeysCollections.all });
+      qc.invalidateQueries({ queryKey: queryKeysCollections.items(variables.collectionId) });
+    },
+  });
+}
+
+export function useRemoveCollectionItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { itemId: number; collectionId: number }) =>
+      api.removeCollectionItem(vars.itemId),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeysCollections.all });
+      qc.invalidateQueries({ queryKey: queryKeysCollections.items(variables.collectionId) });
     },
   });
 }

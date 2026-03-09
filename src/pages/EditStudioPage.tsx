@@ -3,6 +3,7 @@ import type { StudioFull } from "../lib/api";
 import { useUpdateStudio, useStudioMovies } from "../lib/hooks";
 import { tmdbImageUrl } from "../lib/api";
 import { UnderlineInput, UnderlineTextarea, SectionTitle } from "../components/ui";
+import { SmartPoster } from "../components/SmartPoster";
 
 interface EditStudioPageProps {
   studio: StudioFull;
@@ -111,7 +112,22 @@ export function EditStudioPage({ studio, onSave, onCancel }: EditStudioPageProps
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-        <div style={{ maxWidth: 700 }}>
+        <div style={{ maxWidth: 700, display: "grid", gridTemplateColumns: "160px 1fr", gap: 24, alignItems: "start" }}>
+          {/* Left: Logo */}
+          <div>
+            <SmartPoster
+              entityType="studio"
+              entityId={studio.id}
+              title={studio.name}
+              tmdbPosterPath={studio.logo_path ?? null}
+              tmdbId={studio.tmdb_id}
+              size="large"
+              editable
+            />
+          </div>
+
+          {/* Right: Fields */}
+          <div>
           <SectionTitle>Informations</SectionTitle>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
             <UnderlineInput label="Nom" value={form.name} onChange={(v) => set("name", v)} />
@@ -184,6 +200,7 @@ export function EditStudioPage({ studio, onSave, onCancel }: EditStudioPageProps
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Aucun film associé</div>
             )}
           </div>
+          </div> {/* right column */}
         </div>
       </div>
     </div>

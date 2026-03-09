@@ -3,6 +3,7 @@ import type { Person } from "../lib/api";
 import { useUpdatePerson, usePersonMovies } from "../lib/hooks";
 import { tmdbImageUrl } from "../lib/api";
 import { UnderlineInput, UnderlineTextarea, SectionTitle } from "../components/ui";
+import { SmartPoster } from "../components/SmartPoster";
 
 interface EditPersonPageProps {
   person: Person;
@@ -20,7 +21,6 @@ export function EditPersonPage({ person, onSave, onCancel }: EditPersonPageProps
   const [saving, setSaving] = useState(false);
   const updatePerson = useUpdatePerson();
   const { data: filmography = [] } = usePersonMovies(person.id);
-  const photoUrl = tmdbImageUrl(person.photo_path, "w342");
 
   const set = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -120,31 +120,15 @@ export function EditPersonPage({ person, onSave, onCancel }: EditPersonPageProps
         <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 24, maxWidth: 900 }}>
           {/* Left: Photo + info */}
           <div>
-            {photoUrl ? (
-              <img
-                src={photoUrl}
-                alt={person.name}
-                style={{ width: "100%", height: "auto", borderRadius: 8, marginBottom: 12 }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: "100%",
-                  aspectRatio: "2/3",
-                  borderRadius: 8,
-                  background: "var(--bg-surface-alt)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 40,
-                  fontWeight: 600,
-                  color: "var(--text-muted)",
-                  marginBottom: 12,
-                }}
-              >
-                {person.name.split(" ").map((w) => w[0]?.toUpperCase()).join("").slice(0, 2)}
-              </div>
-            )}
+            <SmartPoster
+              entityType="person"
+              entityId={person.id}
+              title={person.name}
+              tmdbPosterPath={person.photo_path ?? null}
+              tmdbId={person.tmdb_id}
+              size="large"
+              editable
+            />
 
             {/* Read-only info */}
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>

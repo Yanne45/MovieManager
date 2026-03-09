@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Movie } from "../lib/api";
 import { updateMovie } from "../lib/api";
 import { UnderlineInput, UnderlineTextarea, TabBar, SectionTitle } from "../components/ui";
+import { SmartPoster } from "../components/SmartPoster";
 
 interface EditMoviePageProps {
   movie: Movie;
@@ -111,6 +112,17 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {tab === "general" && (
           <>
+            <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+              <SmartPoster
+                entityType="movie"
+                entityId={movie.id}
+                title={movie.title}
+                tmdbPosterPath={movie.poster_path ?? null}
+                tmdbId={movie.tmdb_id}
+                size="medium"
+                editable
+              />
+              <div style={{ flex: 1 }}>
             <UnderlineInput label="Titre" value={form.title} onChange={(v) => set("title", v)} />
             <UnderlineInput
               label="Titre original"
@@ -161,6 +173,8 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
               />
               Film possédé (décocher pour wishlist)
             </label>
+              </div> {/* flex: 1 */}
+            </div> {/* flex row */}
           </>
         )}
 

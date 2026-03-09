@@ -453,6 +453,35 @@ export const getImagePaths = (entityType: string, entityId: number, imageType: s
   invoke<ImagePaths | null>("get_image_paths", { entityType, entityId, imageType });
 export const getImageCacheRoot = () => invoke<string>("get_image_cache_root");
 
+export interface TmdbImageCandidate {
+  tmdb_path: string;
+  image_type: string;
+  preview_url: string;
+  width: number | null;
+  height: number | null;
+  vote_average: number | null;
+}
+
+export const importLocalImage = (
+  entityType: string, entityId: number, imageType: string, sourcePath: string
+) => invoke<ImagePaths>("import_local_image", { entityType, entityId, imageType, sourcePath });
+
+export const applyTmdbImage = (
+  entityType: string, entityId: number, imageType: string, tmdbPath: string
+) => invoke<ImagePaths>("apply_tmdb_image", { entityType, entityId, imageType, tmdbPath });
+
+export const deleteEntityImage = (
+  entityType: string, entityId: number, imageType: string
+) => invoke<void>("delete_entity_image", { entityType, entityId, imageType });
+
+export const refreshEntityImages = (entityType: string, entityId: number) =>
+  invoke<void>("refresh_entity_images", { entityType, entityId });
+
+export const purgeOrphanedImages = () => invoke<number>("purge_orphaned_images");
+
+export const getTmdbImageCandidates = (entityType: string, tmdbId: number) =>
+  invoke<TmdbImageCandidate[]>("get_tmdb_image_candidates", { entityType, tmdbId });
+
 // ============================================================================
 // Drag & drop import
 // ============================================================================
@@ -850,3 +879,46 @@ export const getWishlistMovies = (limit?: number) =>
 // ============================================================================
 
 export const seedDemoData = () => invoke<string>("seed_demo_data");
+
+// ============================================================================
+// Import screen
+// ============================================================================
+
+export interface ScannedFilePreview {
+  file_path: string;
+  file_name: string;
+  file_size_mb: number;
+  parsed_title: string | null;
+  parsed_year: number | null;
+  /** "movie" | "episode" | "unknown" */
+  entity_type: string;
+  /** 0–100 */
+  confidence: number;
+  quality: string | null;
+  codec: string | null;
+  is_duplicate: boolean;
+  duplicate_title: string | null;
+}
+
+export interface ImportFileInput {
+  file_path: string;
+  title: string;
+  year: number | null;
+  /** "movie" | "series" */
+  entity_type: string;
+  tmdb_id: number | null;
+}
+
+export interface ImportFileResult {
+  file_path: string;
+  title: string;
+  /** "imported" | "inbox" | "error" */
+  status: string;
+  error: string | null;
+}
+
+export const previewScanPaths = (paths: string[]) =>
+  invoke<ScannedFilePreview[]>("preview_scan_paths", { paths });
+
+export const importFiles = (files: ImportFileInput[]) =>
+  invoke<ImportFileResult[]>("import_files", { files });
