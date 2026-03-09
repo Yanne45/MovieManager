@@ -121,75 +121,78 @@ export function StatsPage() {
         </div>
       </div>
 
-      {/* Genre distribution */}
-      {genreStats && genreStats.length > 0 && (
-        <div style={{ marginTop: 16, padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
-          <SectionTitle>Top genres</SectionTitle>
-          <div style={{ marginTop: 12 }}>
-            {genreStats.map(([name, count]) => {
-              const maxCount = genreStats[0]?.[1] ?? 1;
-              const pct = (count / maxCount) * 100;
-              return (
-                <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, minWidth: 100 }}>{name}</span>
-                  <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--bg-surface-alt)", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${pct}%`,
-                        height: "100%",
-                        borderRadius: 3,
-                        background: "var(--color-primary-soft)",
-                        transition: "width 0.3s",
-                      }}
-                    />
+      {/* Genre distribution + Recent additions — side by side */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+        {/* Genre distribution */}
+        {genreStats && genreStats.length > 0 && (
+          <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+            <SectionTitle>Top genres</SectionTitle>
+            <div style={{ marginTop: 12 }}>
+              {genreStats.map(([name, count]) => {
+                const maxCount = genreStats[0]?.[1] ?? 1;
+                const pct = (count / maxCount) * 100;
+                return (
+                  <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, minWidth: 100 }}>{name}</span>
+                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--bg-surface-alt)", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: "100%",
+                          borderRadius: 3,
+                          background: "var(--color-primary-soft)",
+                          transition: "width 0.3s",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", minWidth: 30, textAlign: "right" }}>
+                      {count}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", minWidth: 30, textAlign: "right" }}>
-                    {count}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Recent additions */}
-      <div style={{ marginTop: 16, padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
-        <SectionTitle>Ajouts récents</SectionTitle>
-        {(!recentAdditions || recentAdditions.length === 0) ? (
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>Aucun ajout récent</p>
-        ) : (
-          <div style={{ marginTop: 8 }}>
-            {recentAdditions.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "8px 0",
-                  borderBottom: i < recentAdditions.length - 1 ? "1px solid var(--border)" : "none",
-                  fontSize: 13,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    padding: "1px 6px",
-                    borderRadius: 3,
-                    background: item.entity_type === "movie" ? "var(--color-primary-soft)" : "var(--bg-surface-alt)",
-                    color: item.entity_type === "movie" ? "var(--color-primary)" : "var(--text-muted)",
-                    marginRight: 10,
-                  }}
-                >
-                  {item.entity_type === "movie" ? "Film" : "Série"}
-                </span>
-                <span style={{ flex: 1, fontWeight: 500 }}>{item.title}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.created_at?.slice(0, 10)}</span>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
         )}
+
+        {/* Recent additions */}
+        <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+          <SectionTitle>Ajouts récents</SectionTitle>
+          {(!recentAdditions || recentAdditions.length === 0) ? (
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>Aucun ajout récent</p>
+          ) : (
+            <div style={{ marginTop: 8 }}>
+              {recentAdditions.map((item, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "8px 0",
+                    borderBottom: i < recentAdditions.length - 1 ? "1px solid var(--border)" : "none",
+                    fontSize: 13,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: "1px 6px",
+                      borderRadius: 3,
+                      background: item.entity_type === "movie" ? "var(--color-primary-soft)" : "var(--bg-surface-alt)",
+                      color: item.entity_type === "movie" ? "var(--color-primary)" : "var(--text-muted)",
+                      marginRight: 10,
+                    }}
+                  >
+                    {item.entity_type === "movie" ? "Film" : "Série"}
+                  </span>
+                  <span style={{ flex: 1, fontWeight: 500 }}>{item.title}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.created_at?.slice(0, 10)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

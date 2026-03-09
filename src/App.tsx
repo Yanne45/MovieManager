@@ -11,6 +11,8 @@ import { RulesPage } from "./pages/RulesPage";
 import { ActorsPage, StudiosPage, TagsPage, CollectionsPage } from "./pages/CatalogPages";
 import { EditMoviePage } from "./pages/EditMoviePage";
 import { EditSeriesPage } from "./pages/EditSeriesPage";
+import { EditPersonPage } from "./pages/EditPersonPage";
+import { EditStudioPage } from "./pages/EditStudioPage";
 import { DuplicatesPage } from "./pages/DuplicatesPage";
 import { SuggestionsPage } from "./pages/SuggestionsPage";
 import { DropZone } from "./components/DropZone";
@@ -18,7 +20,7 @@ import { LoadingSpinner, ErrorPanel } from "./components/ui";
 import { FilterBar, type ActiveFilters, EMPTY_FILTERS } from "./components/FilterBar";
 import { ToastProvider, useToast } from "./components/Toast";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Movie, Series } from "./lib/api";
+import type { Movie, Series, Person, StudioFull } from "./lib/api";
 import * as api from "./lib/api";
 import {
   useMovies,
@@ -86,6 +88,8 @@ const PAGE_TITLES: Record<string, string> = {
   settings: "Paramètres",
   edit_movie: "Éditer film",
   edit_series: "Éditer série",
+  edit_person: "Éditer personne",
+  edit_studio: "Éditer studio",
 };
 
 // ============================================================================
@@ -97,12 +101,15 @@ function AppInner() {
   const [page, setPage] = useState("library");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "gallery">("table");
+  const [compactTable, setCompactTable] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("mm-theme") as "light" | "dark") || "light";
   });
   const [selectedSeriesId, setSelectedSeriesId] = useState<number | null>(null);
   const [editingMovie, setEditingMovie] = useState<Movie | null>(null);
   const [editingSeries, setEditingSeries] = useState<Series | null>(null);
+  const [editingPerson, setEditingPerson] = useState<Person | null>(null);
+  const [editingStudio, setEditingStudio] = useState<StudioFull | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
 
@@ -173,6 +180,8 @@ function AppInner() {
     setSelectedSeriesId(null);
     setEditingMovie(null);
     setEditingSeries(null);
+    setEditingPerson(null);
+    setEditingStudio(null);
   }, []);
 
   const handleSelectSeries = useCallback((id: number) => {
@@ -188,6 +197,16 @@ function AppInner() {
   const handleEditSeries = useCallback((series: Series) => {
     setEditingSeries(series);
     setPage("edit_series");
+  }, []);
+
+  const handleEditPerson = useCallback((person: Person) => {
+    setEditingPerson(person);
+    setPage("edit_person");
+  }, []);
+
+  const handleEditStudio = useCallback((studio: StudioFull) => {
+    setEditingStudio(studio);
+    setPage("edit_studio");
   }, []);
 
   // ── Drag & drop ──
@@ -495,6 +514,8 @@ function AppInner() {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             showViewSwitch={page === "library"}
+            compact={compactTable}
+            onCompactToggle={() => setCompactTable((c) => !c)}
             theme={theme}
             onThemeToggle={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
             onImport={handleImport}
@@ -517,6 +538,7 @@ function AppInner() {
                 <LibraryPage
                   movies={movies}
                   viewMode={viewMode}
+                  compact={compactTable}
                   searchQuery={searchQuery}
                   filters={filters}
                   onEditMovie={handleEditMovie}
@@ -573,15 +595,39 @@ function AppInner() {
               />
             )}
 
+            {page === "edit_person" && editingPerson && (
+              <EditPersonPage
+                person={editingPerson}
+                onSave={() => {
+                  toast("Personne enregistrée", "success");
+                  setEditingPerson(null);
+                  setPage("actors");
+                }}
+                onCancel={() => { setEditingPerson(null); setPage("actors"); }}
+              />
+            )}
+
+            {page === "edit_studio" && editingStudio && (
+              <EditStudioPage
+                studio={editingStudio}
+                onSave={() => {
+                  toast("Studio enregistré", "success");
+                  setEditingStudio(null);
+                  setPage("studios");
+                }}
+                onCancel={() => { setEditingStudio(null); setPage("studios"); }}
+              />
+            )}
+
             {page === "actors" &&
               withLoadingError(peopleQuery,
-                <ActorsPage actors={peopleQuery.data ?? []} searchQuery={searchQuery} />,
+                <ActorsPage actors={peopleQuery.data ?? []} searchQuery={searchQuery} onEditPerson={handleEditPerson} />,
                 "Chargement des acteurs…"
               )}
 
             {page === "studios" &&
               withLoadingError(studiosQuery,
-                <StudiosPage studios={studiosQuery.data ?? []} searchQuery={searchQuery} />,
+                <StudiosPage studios={studiosQuery.data ?? []} searchQuery={searchQuery} onEditStudio={handleEditStudio} />,
                 "Chargement des studios…"
               )}
 

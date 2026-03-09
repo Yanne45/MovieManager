@@ -484,6 +484,19 @@ pub async fn remove_movie_person(pool: &SqlitePool, movie_id: i64, person_id: i6
     Ok(())
 }
 
+/// Get movies linked to a person (reverse lookup for filmography)
+pub async fn get_person_movies(pool: &SqlitePool, person_id: i64) -> Result<Vec<PersonMovieRow>> {
+    Ok(sqlx::query_as::<_, PersonMovieRow>(
+        "SELECT m.id AS movie_id, m.title, m.year, m.poster_path,
+                mp.role, mp.character_name
+         FROM movies m JOIN movie_people mp ON m.id = mp.movie_id
+         WHERE mp.person_id = ? ORDER BY m.year DESC, m.title"
+    )
+    .bind(person_id)
+    .fetch_all(pool)
+    .await?)
+}
+
 // ============================================================================
 // Studios CRUD
 // ============================================================================
@@ -542,6 +555,18 @@ pub async fn remove_movie_studio(pool: &SqlitePool, movie_id: i64, studio_id: i6
     sqlx::query("DELETE FROM movie_studios WHERE movie_id = ? AND studio_id = ?")
         .bind(movie_id).bind(studio_id).execute(pool).await?;
     Ok(())
+}
+
+/// Get movies linked to a studio (reverse lookup)
+pub async fn get_studio_movies(pool: &SqlitePool, studio_id: i64) -> Result<Vec<StudioMovieRow>> {
+    Ok(sqlx::query_as::<_, StudioMovieRow>(
+        "SELECT m.id AS movie_id, m.title, m.year, m.poster_path
+         FROM movies m JOIN movie_studios ms ON m.id = ms.movie_id
+         WHERE ms.studio_id = ? ORDER BY m.year DESC, m.title"
+    )
+    .bind(studio_id)
+    .fetch_all(pool)
+    .await?)
 }
 
 // ============================================================================

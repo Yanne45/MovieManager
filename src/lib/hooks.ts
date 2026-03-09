@@ -540,12 +540,42 @@ export function useMoviePeople(movieId: number) {
   });
 }
 
+export function usePerson(id: number) {
+  return useQuery({
+    queryKey: queryKeysPeople.detail(id),
+    queryFn: () => api.getPerson(id),
+    enabled: id > 0,
+  });
+}
+
+export function usePersonMovies(personId: number) {
+  return useQuery({
+    queryKey: ["personMovies", personId] as const,
+    queryFn: () => api.getPersonMovies(personId),
+    enabled: personId > 0,
+  });
+}
+
+export function useUpdatePerson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name, primaryRole, biography, notes }: {
+      id: number; name?: string; primaryRole?: string; biography?: string; notes?: string;
+    }) => api.updatePerson(id, name, primaryRole, biography, notes),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeysPeople.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeysPeople.all });
+    },
+  });
+}
+
 // ============================================================================
 // Studios hooks
 // ============================================================================
 
 export const queryKeysStudios = {
   all: ["studios"] as const,
+  detail: (id: number) => ["studio", id] as const,
   movieStudios: (movieId: number) => ["movieStudios", movieId] as const,
 };
 
@@ -567,6 +597,27 @@ export function useDeleteStudio() {
   return useMutation({
     mutationFn: api.deleteStudio,
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeysStudios.all }),
+  });
+}
+
+export function useStudioMovies(studioId: number) {
+  return useQuery({
+    queryKey: ["studioMovies", studioId] as const,
+    queryFn: () => api.getStudioMovies(studioId),
+    enabled: studioId > 0,
+  });
+}
+
+export function useUpdateStudio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name, country, description, notes }: {
+      id: number; name?: string; country?: string; description?: string; notes?: string;
+    }) => api.updateStudio(id, name, country, description, notes),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeysStudios.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeysStudios.all });
+    },
   });
 }
 
@@ -746,4 +797,19 @@ export function useIncompleteSeries(limit?: number) {
 
 export function useWishlistMovies(limit?: number) {
   return useQuery({ queryKey: ["wishlist", limit] as const, queryFn: () => api.getWishlistMovies(limit) });
+}
+
+// ============================================================================
+// Seed Demo Data
+// ============================================================================
+
+export function useSeedDemoData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.seedDemoData,
+    onSuccess: () => {
+      // Invalidate everything — all tables are populated
+      qc.invalidateQueries();
+    },
+  });
 }

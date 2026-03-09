@@ -166,7 +166,7 @@ interface PosterThumbProps {
 const POSTER_SIZES = {
   small: { width: 32, height: 44, fontSize: 10 },
   medium: { width: 48, height: 66, fontSize: 12 },
-  large: { width: 120, height: 165, fontSize: 24 },
+  large: { width: 220, height: 330, fontSize: 32 },
 };
 
 export function PosterThumb({ title, posterUrl, color, size = "small" }: PosterThumbProps) {

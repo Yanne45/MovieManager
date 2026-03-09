@@ -64,3 +64,8 @@ pub async fn remove_movie_person(
     queries::remove_movie_person(state.db().pool(), movie_id, person_id, &role)
         .await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_person_movies(state: State<'_, AppState>, person_id: i64) -> Result<Vec<PersonMovieRow>, String> {
+    queries::get_person_movies(state.db().pool(), person_id).await.map_err(|e| e.to_string())
+}

@@ -7,6 +7,8 @@ interface TopbarProps {
   viewMode?: "table" | "gallery";
   onViewModeChange?: (mode: "table" | "gallery") => void;
   showViewSwitch?: boolean;
+  compact?: boolean;
+  onCompactToggle?: () => void;
   theme: "light" | "dark";
   onThemeToggle: () => void;
   onImport?: () => void;
@@ -20,6 +22,8 @@ export function Topbar({
   viewMode,
   onViewModeChange,
   showViewSwitch = false,
+  compact = false,
+  onCompactToggle,
   theme,
   onThemeToggle,
   onImport,
@@ -33,13 +37,15 @@ export function Topbar({
         display: "flex",
         alignItems: "center",
         padding: "0 16px",
-        background: "var(--bg-surface)",
-        borderBottom: "1px solid var(--border)",
+        background: "var(--header-bg)",
+        borderBottom: "1px solid var(--header-border)",
         gap: 12,
       }}
     >
       {/* Page title */}
-      <span style={{ fontSize: 15, fontWeight: 600, marginRight: 8 }}>{title}</span>
+      <span style={{ fontSize: 15, fontWeight: 600, marginRight: 8, color: "var(--header-text)" }}>
+        {title}
+      </span>
 
       {/* Search */}
       <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
@@ -49,7 +55,7 @@ export function Topbar({
             left: 10,
             top: "50%",
             transform: "translateY(-50%)",
-            color: "var(--text-muted)",
+            color: "var(--header-text-muted)",
             fontSize: 13,
             pointerEvents: "none",
           }}
@@ -67,13 +73,19 @@ export function Topbar({
             padding: "6px 12px 6px 30px",
             borderRadius: 8,
             border: "1px solid transparent",
-            background: "var(--bg-surface-alt)",
+            background: "var(--header-input-bg)",
             fontSize: 13,
-            color: "var(--text-main)",
+            color: "var(--header-text)",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
-          onBlur={(e) => (e.target.style.borderColor = "transparent")}
+          onFocus={(e) => {
+            e.target.style.background = "var(--header-input-focus)";
+            e.target.style.borderColor = "var(--header-accent)";
+          }}
+          onBlur={(e) => {
+            e.target.style.background = "var(--header-input-bg)";
+            e.target.style.borderColor = "transparent";
+          }}
         />
       </div>
 
@@ -86,7 +98,7 @@ export function Topbar({
           style={{
             display: "flex",
             borderRadius: 6,
-            border: "1px solid var(--border)",
+            border: "1px solid var(--header-border)",
             overflow: "hidden",
           }}
         >
@@ -103,15 +115,35 @@ export function Topbar({
         </div>
       )}
 
+      {/* Compact toggle (only in table mode) */}
+      {showViewSwitch && viewMode === "table" && onCompactToggle && (
+        <button
+          onClick={onCompactToggle}
+          title={compact ? "Vue standard" : "Vue compacte"}
+          style={{
+            padding: "5px 10px",
+            borderRadius: 6,
+            border: "1px solid var(--header-border)",
+            background: compact ? "rgba(255, 255, 255, 0.2)" : "var(--header-btn-bg)",
+            color: "var(--header-text)",
+            fontSize: 11,
+            cursor: "pointer",
+            fontWeight: compact ? 600 : 400,
+          }}
+        >
+          {compact ? "⊞" : "⊟"}
+        </button>
+      )}
+
       {/* Theme toggle */}
       <button
         onClick={onThemeToggle}
         style={{
           padding: "5px 10px",
           borderRadius: 6,
-          border: "1px solid var(--border)",
-          background: "transparent",
-          color: "var(--text-secondary)",
+          border: "1px solid var(--header-border)",
+          background: "var(--header-btn-bg)",
+          color: "var(--header-text)",
           fontSize: 13,
           cursor: "pointer",
         }}
@@ -127,8 +159,8 @@ export function Topbar({
             padding: "5px 14px",
             borderRadius: 6,
             border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
+            background: "var(--header-accent)",
+            color: "#0F2347",
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
@@ -157,8 +189,8 @@ function ViewButton({
         padding: "4px 12px",
         fontSize: 11,
         fontWeight: active ? 600 : 400,
-        color: active ? "var(--color-primary)" : "var(--text-muted)",
-        background: active ? "var(--color-primary-soft)" : "transparent",
+        color: active ? "#FFFFFF" : "rgba(255, 255, 255, 0.8)",
+        background: active ? "rgba(255, 255, 255, 0.2)" : "transparent",
         border: "none",
         cursor: "pointer",
       }}

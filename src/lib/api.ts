@@ -506,6 +506,17 @@ export const addMoviePerson = (movieId: number, personId: number, role: string, 
 export const removeMoviePerson = (movieId: number, personId: number, role: string) =>
   invoke<void>("remove_movie_person", { movieId, personId, role });
 
+export interface PersonMovieRow {
+  movie_id: number;
+  title: string;
+  year: number | null;
+  poster_path: string | null;
+  role: string;
+  character_name: string | null;
+}
+export const getPersonMovies = (personId: number) =>
+  invoke<PersonMovieRow[]>("get_person_movies", { personId });
+
 // ============================================================================
 // Studios
 // ============================================================================
@@ -542,6 +553,15 @@ export const addMovieStudio = (movieId: number, studioId: number) =>
   invoke<void>("add_movie_studio", { movieId, studioId });
 export const removeMovieStudio = (movieId: number, studioId: number) =>
   invoke<void>("remove_movie_studio", { movieId, studioId });
+
+export interface StudioMovieRow {
+  movie_id: number;
+  title: string;
+  year: number | null;
+  poster_path: string | null;
+}
+export const getStudioMovies = (studioId: number) =>
+  invoke<StudioMovieRow[]>("get_studio_movies", { studioId });
 
 // ============================================================================
 // Collections
@@ -824,3 +844,9 @@ export const getIncompleteSeries = (limit?: number) =>
   invoke<IncompleteSeriesRow[]>("get_incomplete_series", { limit });
 export const getWishlistMovies = (limit?: number) =>
   invoke<SuggestionItem[]>("get_wishlist_movies", { limit });
+
+// ============================================================================
+// Seed Demo Data
+// ============================================================================
+
+export const seedDemoData = () => invoke<string>("seed_demo_data");

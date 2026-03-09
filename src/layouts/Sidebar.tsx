@@ -23,12 +23,12 @@ const NAV_ITEMS = [
 
 const TOOL_ITEMS = [
   { id: "suggestions", label: "Suggestions" },
-  { id: "inbox", label: "Inbox" },
-  { id: "rules", label: "Règles" },
-  { id: "duplicates", label: "Doublons" },
   { id: "stats", label: "Statistiques" },
   { id: "settings", label: "Paramètres" },
 ];
+
+// Pages that live inside the "Réglages" collapsible group
+const REGLAGES_PAGES = ["inbox", "rules", "duplicates"];
 
 export function Sidebar({
   currentPage,
@@ -41,6 +41,14 @@ export function Sidebar({
   onBrowseDatabase,
 }: SidebarProps) {
   const [dbMenuOpen, setDbMenuOpen] = useState(false);
+  const [reglagesOpen, setReglagesOpen] = useState(() => REGLAGES_PAGES.includes(currentPage));
+  const [doublonsOpen, setDoublonsOpen] = useState(false);
+
+  // Auto-open réglages group when navigating to a sub-page
+  const isReglagesActive = REGLAGES_PAGES.includes(currentPage);
+  if (isReglagesActive && !reglagesOpen) {
+    setReglagesOpen(true);
+  }
 
   return (
     <aside
@@ -233,9 +241,59 @@ export function Sidebar({
             label={item.label}
             active={currentPage === item.id}
             onClick={() => onNavigate(item.id)}
-            badge={item.id === "inbox" && inboxCount > 0 ? inboxCount : undefined}
           />
         ))}
+
+        {/* Réglages collapsible group */}
+        <CollapsibleItem
+          label="Réglages"
+          open={reglagesOpen}
+          onToggle={() => setReglagesOpen(!reglagesOpen)}
+          active={isReglagesActive}
+        >
+          <SidebarItem
+            label="Inbox"
+            active={currentPage === "inbox"}
+            onClick={() => onNavigate("inbox")}
+            badge={inboxCount > 0 ? inboxCount : undefined}
+            indent={1}
+          />
+          <SidebarItem
+            label="Règles"
+            active={currentPage === "rules"}
+            onClick={() => onNavigate("rules")}
+            indent={1}
+          />
+
+          {/* Doublons with sub-tree */}
+          <CollapsibleItem
+            label="Doublons"
+            open={doublonsOpen}
+            onToggle={() => setDoublonsOpen(!doublonsOpen)}
+            active={currentPage === "duplicates"}
+            indent={1}
+            onClick={() => onNavigate("duplicates")}
+          >
+            <SidebarItem
+              label="Exacts"
+              active={false}
+              onClick={() => onNavigate("duplicates")}
+              indent={2}
+            />
+            <SidebarItem
+              label="Probables"
+              active={false}
+              onClick={() => onNavigate("duplicates")}
+              indent={2}
+            />
+            <SidebarItem
+              label="Multi-versions"
+              active={false}
+              onClick={() => onNavigate("duplicates")}
+              indent={2}
+            />
+          </CollapsibleItem>
+        </CollapsibleItem>
       </SidebarSection>
     </aside>
   );
@@ -268,12 +326,15 @@ function SidebarItem({
   active,
   onClick,
   badge,
+  indent = 0,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
   badge?: number;
+  indent?: number;
 }) {
+  const paddingLeft = 16 + indent * 16;
   return (
     <button
       onClick={onClick}
@@ -281,8 +342,8 @@ function SidebarItem({
         display: "flex",
         alignItems: "center",
         width: "100%",
-        padding: "7px 16px",
-        fontSize: 13,
+        padding: `7px 16px 7px ${paddingLeft}px`,
+        fontSize: indent > 0 ? 12 : 13,
         fontWeight: active ? 600 : 400,
         color: active ? "var(--color-primary)" : "var(--text-secondary)",
         background: active ? "var(--color-primary-soft)" : "transparent",
@@ -319,5 +380,79 @@ function SidebarItem({
         </span>
       )}
     </button>
+  );
+}
+
+function CollapsibleItem({
+  label,
+  open,
+  onToggle,
+  active,
+  children,
+  indent = 0,
+  onClick,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  active: boolean;
+  children: ReactNode;
+  indent?: number;
+  onClick?: () => void;
+}) {
+  const paddingLeft = 16 + indent * 16;
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          padding: `7px 12px 7px ${paddingLeft}px`,
+          fontSize: indent > 0 ? 12 : 13,
+          fontWeight: active ? 600 : 500,
+          color: active ? "var(--color-primary)" : "var(--text-secondary)",
+          background: active && !open ? "var(--color-primary-soft)" : "transparent",
+          cursor: "pointer",
+          transition: "background 0.1s",
+        }}
+        onMouseEnter={(e) => {
+          if (!active || open) e.currentTarget.style.background = "var(--bg-surface-alt)";
+        }}
+        onMouseLeave={(e) => {
+          if (!active || open) e.currentTarget.style.background = "transparent";
+        }}
+      >
+        {/* Chevron toggle */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "0 4px 0 0",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            display: "flex",
+            alignItems: "center",
+            transition: "transform 0.15s",
+            transform: open ? "rotate(90deg)" : "rotate(0deg)",
+          }}
+        >
+          ▶
+        </button>
+
+        {/* Label (clicking navigates if onClick provided, otherwise toggles) */}
+        <span
+          style={{ flex: 1 }}
+          onClick={onClick || onToggle}
+        >
+          {label}
+        </span>
+      </div>
+
+      {/* Children (collapsible) */}
+      {open && children}
+    </div>
   );
 }

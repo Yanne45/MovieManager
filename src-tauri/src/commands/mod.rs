@@ -18,3 +18,4 @@ pub mod stats;
 pub mod backup;
 pub mod nfo;
 pub mod export;
+pub mod seed;

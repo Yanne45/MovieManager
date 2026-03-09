@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { TabBar, UnderlineInput, SectionTitle } from "../components/ui";
 import type { Library } from "../lib/api";
-import { useFfprobeStatus } from "../lib/hooks";
+import { useFfprobeStatus, useSeedDemoData } from "../lib/hooks";
 
 export interface RecentDatabase {
   path: string;
@@ -332,6 +332,18 @@ function DatabaseTab({
   onExportJson?: () => void;
   onExportCsv?: () => void;
 }) {
+  const seedMutation = useSeedDemoData();
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
+
+  const handleSeedDemo = () => {
+    if (!confirm("Cela va insérer des données de démo dans la base actuelle. Continuer ?")) return;
+    setSeedMessage(null);
+    seedMutation.mutate(undefined, {
+      onSuccess: (summary) => setSeedMessage(summary),
+      onError: (err) => setSeedMessage(`Erreur : ${err}`),
+    });
+  };
+
   return (
     <div style={{ maxWidth: 600 }}>
       {/* Current database */}
@@ -438,6 +450,48 @@ function DatabaseTab({
         >
           Export CSV
         </button>
+      </div>
+
+      {/* Demo data */}
+      <SectionTitle>Données de test</SectionTitle>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={handleSeedDemo}
+            disabled={seedMutation.isPending}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: seedMutation.isPending ? "wait" : "pointer",
+              opacity: seedMutation.isPending ? 0.6 : 1,
+            }}
+          >
+            {seedMutation.isPending ? "Insertion en cours..." : "Charger données de démo"}
+          </button>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            Insère films, séries, personnes, tags, règles, etc. pour tester toutes les pages.
+          </span>
+        </div>
+        {seedMessage && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 14px",
+              borderRadius: 6,
+              fontSize: 12,
+              background: seedMutation.isError ? "var(--score-d-bg)" : "var(--score-a-bg)",
+              color: seedMutation.isError ? "var(--score-d-text)" : "var(--score-a-text)",
+              border: `1px solid ${seedMutation.isError ? "var(--error)" : "var(--success)"}`,
+            }}
+          >
+            {seedMessage}
+          </div>
+        )}
       </div>
 
       {/* Recent databases */}

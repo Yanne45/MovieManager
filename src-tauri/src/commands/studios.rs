@@ -45,3 +45,8 @@ pub async fn add_movie_studio(state: State<'_, AppState>, movie_id: i64, studio_
 pub async fn remove_movie_studio(state: State<'_, AppState>, movie_id: i64, studio_id: i64) -> Result<(), String> {
     queries::remove_movie_studio(state.db().pool(), movie_id, studio_id).await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_studio_movies(state: State<'_, AppState>, studio_id: i64) -> Result<Vec<StudioMovieRow>, String> {
+    queries::get_studio_movies(state.db().pool(), studio_id).await.map_err(|e| e.to_string())
+}

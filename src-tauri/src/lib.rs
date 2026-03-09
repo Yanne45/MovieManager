@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod commands;
 mod db;
 mod modules;
@@ -227,6 +229,7 @@ pub fn run() {
             commands::people::get_movie_people,
             commands::people::add_movie_person,
             commands::people::remove_movie_person,
+            commands::people::get_person_movies,
             // Studios commands
             commands::studios::get_studios,
             commands::studios::create_studio,
@@ -235,6 +238,7 @@ pub fn run() {
             commands::studios::get_movie_studios,
             commands::studios::add_movie_studio,
             commands::studios::remove_movie_studio,
+            commands::studios::get_studio_movies,
             // Collections commands
             commands::collections::get_collections,
             commands::collections::create_collection,
@@ -264,6 +268,8 @@ pub fn run() {
             // Export commands
             commands::export::export_json,
             commands::export::export_csv,
+            // Seed demo data
+            commands::seed::seed_demo_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MovieManager");

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { ScoreBadge, SectionTitle, EmptyState } from "../components/ui";
+import { ScoreBadge, SectionTitle } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
 import type { Movie } from "../lib/api";
 import { tmdbImageUrl } from "../lib/api";
@@ -12,13 +12,14 @@ import type { ActiveFilters } from "../components/FilterBar";
 interface LibraryPageProps {
   movies: Movie[];
   viewMode: "table" | "gallery";
+  compact?: boolean;
   searchQuery: string;
   filters?: ActiveFilters;
   onEditMovie?: (movie: Movie) => void;
   onFocusSearch?: () => void;
 }
 
-export function LibraryPage({ movies, viewMode, searchQuery, filters, onEditMovie, onFocusSearch }: LibraryPageProps) {
+export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onFocusSearch }: LibraryPageProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const filtered = useMemo(() => {
@@ -86,27 +87,26 @@ export function LibraryPage({ movies, viewMode, searchQuery, filters, onEditMovi
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+    <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
       {/* Table */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <MovieTable movies={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+        <MovieTable movies={filtered} selectedId={selectedId} onSelect={setSelectedId} compact={compact} />
       </div>
 
-      {/* Detail panel */}
+      {/* Sliding detail panel */}
       <div
         style={{
-          width: 320,
+          width: 340,
           flexShrink: 0,
           borderLeft: "1px solid var(--border)",
           background: "var(--bg-surface)",
           overflowY: "auto",
+          transition: "margin-right 0.25s ease, opacity 0.2s ease",
+          marginRight: selected ? 0 : -340,
+          opacity: selected ? 1 : 0,
         }}
       >
-        {selected ? (
-          <MovieDetailPanel movie={selected} />
-        ) : (
-          <EmptyState message="Sélectionnez un film" />
-        )}
+        {selected && <MovieDetailPanel movie={selected} />}
       </div>
     </div>
   );
@@ -120,10 +120,12 @@ function MovieTable({
   movies,
   selectedId,
   onSelect,
+  compact = false,
 }: {
   movies: Movie[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  compact?: boolean;
 }) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -136,7 +138,10 @@ function MovieTable({
             zIndex: 1,
           }}
         >
-          {["", "Titre", "Année", "Durée", "Score", "Format"].map((h, i) => (
+          {(compact
+            ? ["Titre", "Année", "Durée", "Score", "Format"]
+            : ["", "Titre", "Année", "Durée", "Score", "Format"]
+          ).map((h, i) => (
             <th
               key={i}
               style={{
@@ -179,37 +184,39 @@ function MovieTable({
                     i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC";
               }}
             >
-              <td style={{ padding: "6px 10px", width: 42 }}>
-                <SmartPoster
-                  entityType="movie"
-                  entityId={m.id}
-                  title={m.title}
-                  tmdbPosterPath={m.poster_path}
-                  size="small"
-                />
-              </td>
+              {!compact && (
+                <td style={{ padding: "6px 10px", width: 42 }}>
+                  <SmartPoster
+                    entityType="movie"
+                    entityId={m.id}
+                    title={m.title}
+                    tmdbPosterPath={m.poster_path}
+                    size="small"
+                  />
+                </td>
+              )}
               <td
                 style={{
-                  padding: "6px 10px",
-                  fontWeight: 500,
+                  padding: compact ? "4px 10px" : "6px 10px",
                   maxWidth: 260,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                 }}
               >
-                {m.title}
+                <div style={{ fontWeight: 500 }}>{m.title}</div>
+                <MovieDirectorsLine movieId={m.id} />
               </td>
-              <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)" }}>
                 {m.year || "—"}
               </td>
-              <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)" }}>
                 {m.runtime ? `${m.runtime} min` : "—"}
               </td>
-              <td style={{ padding: "6px 10px" }}>
+              <td style={{ padding: compact ? "4px 10px" : "6px 10px" }}>
                 <ScoreBadge score={m.primary_quality_score} />
               </td>
-              <td style={{ padding: "6px 10px", color: "var(--text-secondary)", fontSize: 12 }}>
+              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-secondary)", fontSize: 12 }}>
                 {m.primary_quality_score === "A"
                   ? "4K HDR"
                   : m.primary_quality_score === "B"
@@ -223,6 +230,28 @@ function MovieTable({
         })}
       </tbody>
     </table>
+  );
+}
+
+/** Displays directors under the movie title in the table row */
+function MovieDirectorsLine({ movieId }: { movieId: number }) {
+  const { data: people } = useMoviePeople(movieId);
+  const directors = people?.filter((p) => p.role === "director") ?? [];
+  if (directors.length === 0) return null;
+  return (
+    <div
+      style={{
+        fontSize: 9,
+        fontStyle: "italic",
+        color: "var(--text-muted)",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        lineHeight: 1.3,
+      }}
+    >
+      {directors.map((d) => d.name).join(", ")}
+    </div>
   );
 }
 
@@ -240,9 +269,9 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
   const actors = people?.filter((p) => p.role === "actor") ?? [];
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: 14, textAlign: "center" }}>
       {/* Poster */}
-      <div style={{ marginBottom: 14, display: "flex", justifyContent: "center" }}>
+      <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}>
         <SmartPoster
           entityType="movie"
           entityId={movie.id}
@@ -253,35 +282,29 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
       </div>
 
       {/* Title + year */}
-      <h2 style={{ fontSize: 17, fontWeight: 600, marginBottom: 2 }}>{movie.title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{movie.title}</h2>
       {movie.original_title && movie.original_title !== movie.title && (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>
           {movie.original_title}
         </p>
       )}
-      <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>
+      <p style={{ fontSize: 10, color: "var(--text-secondary)", marginBottom: 8 }}>
         {[movie.year, movie.runtime ? `${movie.runtime} min` : null]
           .filter(Boolean)
           .join(" · ")}
       </p>
 
-      {/* Score */}
-      {movie.primary_quality_score && (
-        <div style={{ marginBottom: 12 }}>
-          <ScoreBadge score={movie.primary_quality_score} />
-        </div>
-      )}
-
-      {/* Genres */}
-      {genres && genres.length > 0 && (
-        <div style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {genres.map((g) => (
+      {/* Score + Genres on same line */}
+      {(movie.primary_quality_score || (genres && genres.length > 0)) && (
+        <div style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 3, justifyContent: "center", alignItems: "center" }}>
+          {movie.primary_quality_score && <ScoreBadge score={movie.primary_quality_score} />}
+          {genres && genres.map((g) => (
             <span
               key={g.id}
               style={{
-                padding: "2px 8px",
+                padding: "1px 6px",
                 borderRadius: 999,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 500,
                 background: "var(--color-primary-soft)",
                 color: "var(--color-primary)",
@@ -295,9 +318,9 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
 
       {/* Synopsis */}
       {movie.overview && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10, textAlign: "left" }}>
           <SectionTitle>Synopsis</SectionTitle>
-          <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55 }}>
+          <p style={{ fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.5 }}>
             {movie.overview}
           </p>
         </div>
@@ -305,20 +328,20 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
 
       {/* Tagline */}
       {movie.tagline && (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 14 }}>
+        <p style={{ fontSize: 10, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 10 }}>
           {movie.tagline}
         </p>
       )}
 
       {/* Casting */}
       {(directors.length > 0 || actors.length > 0) && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10, textAlign: "left" }}>
           <SectionTitle>Casting</SectionTitle>
           {directors.length > 0 && (
-            <div style={{ marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Réalisation</span>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Réalisation</span>
               {directors.map((d) => (
-                <div key={d.person_id} style={{ fontSize: 12, color: "var(--text-secondary)", paddingLeft: 8 }}>
+                <div key={d.person_id} style={{ fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6 }}>
                   {d.name}
                 </div>
               ))}
@@ -326,18 +349,18 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
           )}
           {actors.length > 0 && (
             <div>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Acteurs</span>
-              {actors.slice(0, 8).map((a) => (
-                <div key={a.person_id} style={{ fontSize: 12, color: "var(--text-secondary)", paddingLeft: 8 }}>
+              <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Acteurs</span>
+              {actors.slice(0, 6).map((a) => (
+                <div key={a.person_id} style={{ fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6 }}>
                   {a.name}
                   {a.character_name && (
-                    <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>— {a.character_name}</span>
+                    <span style={{ color: "var(--text-muted)", marginLeft: 3 }}>— {a.character_name}</span>
                   )}
                 </div>
               ))}
-              {actors.length > 8 && (
-                <div style={{ fontSize: 11, color: "var(--text-muted)", paddingLeft: 8, marginTop: 2 }}>
-                  +{actors.length - 8} autres
+              {actors.length > 6 && (
+                <div style={{ fontSize: 9, color: "var(--text-muted)", paddingLeft: 6, marginTop: 2 }}>
+                  +{actors.length - 6} autres
                 </div>
               )}
             </div>
@@ -347,7 +370,7 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
 
       {/* Versions */}
       {versions && versions.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10, textAlign: "left" }}>
           <SectionTitle>Versions ({versions.length})</SectionTitle>
           {versions.map((v) => (
             <VersionCard key={v.id} version={v} />
@@ -356,15 +379,15 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
       )}
 
       {/* IDs */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 10, textAlign: "left" }}>
         <SectionTitle>Identifiants</SectionTitle>
         <div
           style={{
-            fontSize: 11,
+            fontSize: 9,
             color: "var(--text-muted)",
             display: "grid",
-            gridTemplateColumns: "60px 1fr",
-            rowGap: 3,
+            gridTemplateColumns: "50px 1fr",
+            rowGap: 2,
           }}
         >
           {movie.tmdb_id && (
@@ -384,17 +407,17 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
 
       {/* Notes */}
       {movie.notes && (
-        <div>
+        <div style={{ textAlign: "left" }}>
           <SectionTitle>Notes</SectionTitle>
-          <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{movie.notes}</p>
+          <p style={{ fontSize: 10, color: "var(--text-secondary)" }}>{movie.notes}</p>
         </div>
       )}
 
       {/* Similar movies */}
       {similar && similar.length > 0 && (
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 10, textAlign: "left" }}>
           <SectionTitle>Films similaires ({similar.length})</SectionTitle>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, justifyContent: "center" }}>
             {similar.map((s) => (
               <div
                 key={s.id}
@@ -453,31 +476,31 @@ function VersionCard({ version: v }: { version: import("../lib/api").MediaVersio
   return (
     <div
       style={{
-        padding: "8px 10px",
-        borderRadius: 6,
-        marginBottom: 4,
+        padding: "5px 8px",
+        borderRadius: 5,
+        marginBottom: 3,
         background: "var(--bg-surface-alt)",
         border: "1px solid var(--border)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, flex: 1 }}>
           {v.label || "Version principale"}
         </span>
         {v.quality_score && <ScoreBadge score={v.quality_score} />}
       </div>
       {techParts.length > 0 && (
-        <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+        <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>
           {techParts.join(" · ")}
         </div>
       )}
       {audioParts.length > 0 && (
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: 9, color: "var(--text-muted)" }}>
           Audio : {audioParts.join(" · ")}
         </div>
       )}
       {v.video_bitrate && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+        <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>
           {Math.round(v.video_bitrate / 1000)} kbps
           {v.duration ? ` · ${Math.round(v.duration / 60)} min` : ""}
         </div>

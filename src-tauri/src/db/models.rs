@@ -398,6 +398,26 @@ pub struct MovieStudioRow {
     pub tmdb_id: Option<i64>,
 }
 
+/// Movies linked to a person (reverse lookup)
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct PersonMovieRow {
+    pub movie_id: i64,
+    pub title: String,
+    pub year: Option<i64>,
+    pub poster_path: Option<String>,
+    pub role: String,
+    pub character_name: Option<String>,
+}
+
+/// Movies linked to a studio (reverse lookup)
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct StudioMovieRow {
+    pub movie_id: i64,
+    pub title: String,
+    pub year: Option<i64>,
+    pub poster_path: Option<String>,
+}
+
 /// Collection with item count (for listing)
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CollectionWithCount {
