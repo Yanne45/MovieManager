@@ -120,6 +120,18 @@ export function useMovieFileSizes() {
   });
 }
 
+export function useMovieFileLocations() {
+  return useQuery({
+    queryKey: ["movieFileLocations"],
+    queryFn: async () => {
+      const rows = await api.getMovieFileLocations();
+      const map = new Map<number, api.MovieFileLocation>();
+      for (const loc of rows) map.set(loc.movie_id, loc);
+      return map;
+    },
+  });
+}
+
 export function useMovie(id: number) {
   return useQuery({
     queryKey: queryKeys.movie(id),
@@ -200,6 +212,43 @@ export function useDeleteTag() {
   return useMutation({
     mutationFn: api.deleteTag,
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tags }),
+  });
+}
+
+// ============================================================================
+// Genre hooks
+// ============================================================================
+
+export function useGenres() {
+  return useQuery({
+    queryKey: ["genres"],
+    queryFn: api.getGenres,
+  });
+}
+
+export function useCreateGenre() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, tmdbId }: { name: string; tmdbId?: number }) =>
+      api.createGenre(name, tmdbId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["genres"] }),
+  });
+}
+
+export function useUpdateGenre() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) =>
+      api.updateGenre(id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["genres"] }),
+  });
+}
+
+export function useDeleteGenre() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteGenre,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["genres"] }),
   });
 }
 
@@ -752,14 +801,6 @@ export function useUpdateEpisode() {
 }
 
 // ============================================================================
-// Genres hooks
-// ============================================================================
-
-export function useGenres() {
-  return useQuery({ queryKey: ["genres"] as const, queryFn: api.getGenres });
-}
-
-// ============================================================================
 // Media Versions hooks
 // ============================================================================
 
@@ -875,6 +916,49 @@ export function useSeedDemoData() {
     onSuccess: () => {
       // Invalidate everything — all tables are populated
       qc.invalidateQueries();
+    },
+  });
+}
+
+// ============================================================================
+// Score Weights
+// ============================================================================
+
+export function useScoreWeights() {
+  return useQuery({
+    queryKey: ["scoreWeights"] as const,
+    queryFn: api.getScoreWeights,
+  });
+}
+
+export function useSetScoreWeights() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.setScoreWeights,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scoreWeights"] });
+    },
+  });
+}
+
+export function useRecomputeAllScores() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.recomputeAllScores,
+    onSuccess: () => {
+      // Scores on movies and versions have changed — refresh both
+      qc.invalidateQueries({ queryKey: ["movies"] });
+      qc.invalidateQueries({ queryKey: ["movieVersions"] });
+    },
+  });
+}
+
+export function useSyncEpisodesFromTmdb(seriesId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.syncEpisodesFromTmdb(seriesId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seriesDetail", seriesId] });
     },
   });
 }

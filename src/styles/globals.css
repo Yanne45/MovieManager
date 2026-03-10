@@ -36,6 +36,11 @@
   --warning: #F59E0B;
   --error: #EF4444;
 
+  /* Table row states */
+  --row-odd-bg: #F8F9FC;
+  --row-hover-bg: #EDF2FF;
+  --row-multiselect-bg: #FEF9C3;
+
   /* Score badge colors */
   --score-a-bg: #DCFCE7;
   --score-a-text: #16A34A;
@@ -77,6 +82,11 @@
   --success: #4ADE80;
   --warning: #FBBF24;
   --error: #F87171;
+
+  /* Table row states */
+  --row-odd-bg: #1E2130;
+  --row-hover-bg: #252A3D;
+  --row-multiselect-bg: #2D2800;
 
   /* Score badge backgrounds — softer for dark */
   --score-a-bg: #14532D;

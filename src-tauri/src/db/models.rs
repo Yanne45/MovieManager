@@ -17,6 +17,7 @@ pub struct Library {
     pub total_files: i64,
     pub total_size: i64,
     pub notes: Option<String>,
+    pub volume_label: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -28,6 +29,7 @@ pub struct CreateLibrary {
     #[serde(default = "default_lib_type")]
     pub lib_type: String,
     pub notes: Option<String>,
+    pub volume_label: Option<String>,
 }
 
 fn default_lib_type() -> String {
@@ -41,6 +43,7 @@ pub struct UpdateLibrary {
     pub lib_type: Option<String>,
     pub is_online: Option<bool>,
     pub notes: Option<String>,
+    pub volume_label: Option<String>,
 }
 
 // ============================================================================
@@ -310,6 +313,40 @@ pub struct CollectionItemRow {
 }
 
 // ============================================================================
+// App settings
+// ============================================================================
+
+/// Configurable weights for the quality score computation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoreWeights {
+    /// Max points awarded for resolution (default 40)
+    pub resolution: i32,
+    /// Max points awarded for video codec (default 20)
+    pub codec: i32,
+    /// Max points awarded for video bitrate (default 20)
+    pub bitrate: i32,
+    /// Max points awarded for audio channels (default 15)
+    pub audio_channels: i32,
+    /// Bonus points for lossless audio codec (default 5)
+    pub audio_lossless: i32,
+    /// Bonus points for HDR content (default 5)
+    pub hdr: i32,
+}
+
+impl Default for ScoreWeights {
+    fn default() -> Self {
+        ScoreWeights {
+            resolution: 40,
+            codec: 20,
+            bitrate: 20,
+            audio_channels: 15,
+            audio_lossless: 5,
+            hdr: 5,
+        }
+    }
+}
+
+// ============================================================================
 // System
 // ============================================================================
 
@@ -335,6 +372,16 @@ pub struct InboxItem {
 // ============================================================================
 // Query helpers (for listing with counts, joins, etc.)
 // ============================================================================
+
+/// Primary file location for a movie (for library grid display)
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MovieFileLocation {
+    pub movie_id: i64,
+    pub volume_label: Option<String>,
+    pub file_path: String,
+    pub file_name: String,
+    pub library_name: String,
+}
 
 /// Movie with genre names and tag names for table display
 #[derive(Debug, Serialize)]

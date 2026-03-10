@@ -13,6 +13,8 @@ use sqlx::SqlitePool;
 use std::path::Path;
 use std::process::Command;
 
+use crate::db::models::ScoreWeights;
+
 // ============================================================================
 // FFprobe execution
 // ============================================================================
@@ -283,7 +285,7 @@ pub fn analyze_file(file_path: &Path) -> Result<MediaAnalysis> {
         .collect();
 
     // ── Quality score ──
-    let quality_score = compute_quality_score(video.as_ref(), &audio_tracks);
+    let quality_score = compute_quality_score_with_weights(video.as_ref(), &audio_tracks, &ScoreWeights::default());
 
     Ok(MediaAnalysis {
         file_path: file_path.to_string_lossy().to_string(),
@@ -302,97 +304,212 @@ pub fn analyze_file(file_path: &Path) -> Result<MediaAnalysis> {
 // Quality score computation
 // ============================================================================
 
-/// Compute quality score A/B/C/D based on technical specs
+/// Compute quality score using configurable weights.
 ///
-/// Scoring matrix (from the MD spec):
-/// - A: 4K + HEVC/AV1 + high bitrate + multichannel audio
-/// - B: 1080p + good codec + decent bitrate
-/// - C: 720p or old codec or medium bitrate
-/// - D: SD or poor quality
-fn compute_quality_score(video: Option<&VideoStream>, audio: &[AudioStream]) -> String {
+/// Each category's raw score is scaled to the user-configured max for that
+/// category, then summed. Grade thresholds are fixed percentages of the total
+/// max (A ≥ 71 %, B ≥ 48 %, C ≥ 29 %).
+pub fn compute_quality_score_with_weights(
+    video: Option<&VideoStream>,
+    audio: &[AudioStream],
+    weights: &ScoreWeights,
+) -> String {
     let Some(v) = video else {
         return "D".to_string();
     };
 
-    let mut score: i32 = 0;
-
-    // Resolution scoring (0-40 points)
     let height = v.height;
-    score += match height {
+
+    // --- Resolution (raw 0-40, scaled to weights.resolution) ---
+    let res_raw: i32 = match height {
         h if h >= 2160 => 40,
         h if h >= 1080 => 28,
-        h if h >= 720 => 16,
-        h if h >= 480 => 6,
-        _ => 0,
+        h if h >= 720  => 16,
+        h if h >= 480  => 6,
+        _              => 0,
     };
+    let res_score = scale(res_raw, 40, weights.resolution);
 
-    // Codec scoring (0-20 points)
+    // --- Codec (raw 0-20, scaled to weights.codec) ---
     let codec = v.codec.to_uppercase();
-    score += match codec.as_str() {
-        "HEVC" | "AV1" => 20,
-        "H.264" | "AVC" => 12,
-        "VP9" => 14,
-        "MPEG2" | "MPEG4" | "XVID" | "DIVX" => 4,
-        _ => 6,
+    let codec_raw: i32 = match codec.as_str() {
+        "HEVC" | "AV1"                        => 20,
+        "VP9"                                  => 14,
+        "H.264" | "AVC"                        => 12,
+        "MPEG2" | "MPEG4" | "XVID" | "DIVX"   => 4,
+        _                                      => 6,
     };
+    let codec_score = scale(codec_raw, 20, weights.codec);
 
-    // Bitrate scoring (0-20 points) — normalized by resolution
+    // --- Bitrate (raw 0-20, scaled to weights.bitrate) ---
     let bitrate_kbps = v.bitrate / 1000;
-    let bitrate_score = if height >= 2160 {
-        // 4K: excellent ≥15Mbps, good ≥8Mbps, ok ≥4Mbps
-        if bitrate_kbps >= 15_000 { 20 }
-        else if bitrate_kbps >= 8_000 { 14 }
-        else if bitrate_kbps >= 4_000 { 8 }
-        else { 3 }
+    let bitrate_raw: i32 = if height >= 2160 {
+        if bitrate_kbps >= 15_000 { 20 } else if bitrate_kbps >= 8_000 { 14 }
+        else if bitrate_kbps >= 4_000 { 8 } else { 3 }
     } else if height >= 1080 {
-        // 1080p: excellent ≥10Mbps, good ≥5Mbps, ok ≥2Mbps
-        if bitrate_kbps >= 10_000 { 20 }
-        else if bitrate_kbps >= 5_000 { 14 }
-        else if bitrate_kbps >= 2_000 { 8 }
-        else { 3 }
+        if bitrate_kbps >= 10_000 { 20 } else if bitrate_kbps >= 5_000 { 14 }
+        else if bitrate_kbps >= 2_000 { 8 } else { 3 }
     } else if height >= 720 {
-        if bitrate_kbps >= 5_000 { 18 }
-        else if bitrate_kbps >= 2_000 { 12 }
-        else { 5 }
+        if bitrate_kbps >= 5_000 { 18 } else if bitrate_kbps >= 2_000 { 12 } else { 5 }
     } else {
-        if bitrate_kbps >= 2_000 { 12 }
-        else { 3 }
+        if bitrate_kbps >= 2_000 { 12 } else { 3 }
     };
-    score += bitrate_score;
+    let bitrate_score = scale(bitrate_raw, 20, weights.bitrate);
 
-    // Audio scoring (0-15 points)
-    let best_audio = audio.iter()
-        .max_by_key(|a| a.channels);
-    if let Some(a) = best_audio {
-        score += match a.channels {
-            c if c >= 8 => 15, // 7.1 / Atmos
-            c if c >= 6 => 12, // 5.1
-            2 => 6,
-            _ => 3,
+    // --- Audio channels (raw 0-15, scaled to weights.audio_channels) ---
+    let best_audio = audio.iter().max_by_key(|a| a.channels);
+    let (channels_raw, is_lossless) = if let Some(a) = best_audio {
+        let ch: i32 = match a.channels {
+            c if c >= 8 => 15,
+            c if c >= 6 => 12,
+            2            => 6,
+            _            => 3,
         };
+        let lossless = ["TRUEHD", "DTS-HD MA", "FLAC", "PCM", "LPCM"]
+            .iter()
+            .any(|c| a.codec.to_uppercase().contains(c));
+        (ch, lossless)
+    } else {
+        (0, false)
+    };
+    let channels_score = scale(channels_raw, 15, weights.audio_channels);
 
-        // Bonus for lossless audio codecs
-        let audio_codec = a.codec.to_uppercase();
-        if ["TRUEHD", "DTS-HD MA", "FLAC", "PCM", "LPCM"].iter()
-            .any(|c| audio_codec.contains(c))
-        {
-            score += 5;
-        }
-    }
+    // --- Lossless audio bonus ---
+    let lossless_score = if is_lossless { weights.audio_lossless } else { 0 };
 
-    // HDR bonus (0-5 points)
-    if v.hdr_format.is_some() {
-        score += 5;
-    }
+    // --- HDR bonus ---
+    let hdr_score = if v.hdr_format.is_some() { weights.hdr } else { 0 };
 
-    // Map score to grade
-    // Max possible: 40 + 20 + 20 + 15 + 5 + 5 = 105
-    match score {
-        s if s >= 75 => "A".to_string(),
-        s if s >= 50 => "B".to_string(),
-        s if s >= 30 => "C".to_string(),
-        _ => "D".to_string(),
+    let total = res_score + codec_score + bitrate_score + channels_score + lossless_score + hdr_score;
+    let max_total = weights.resolution + weights.codec + weights.bitrate
+        + weights.audio_channels + weights.audio_lossless + weights.hdr;
+
+    grade_from_pct(total, max_total)
+}
+
+/// Legacy wrapper — uses default weights (for tests and backwards compat)
+#[allow(dead_code)]
+fn compute_quality_score(video: Option<&VideoStream>, audio: &[AudioStream]) -> String {
+    compute_quality_score_with_weights(video, audio, &ScoreWeights::default())
+}
+
+/// Recompute a quality score from stored DB strings (no FFprobe needed).
+///
+/// Used by `recompute_all_scores` to update scores after the user changes weights.
+pub fn compute_score_from_stored(
+    resolution: Option<&str>,
+    video_codec: Option<&str>,
+    video_bitrate: Option<i64>,
+    audio_codec: Option<&str>,
+    audio_channels: Option<&str>,   // channel layout string: "5.1", "7.1", "Stereo"…
+    has_hdr: bool,
+    weights: &ScoreWeights,
+) -> String {
+    // --- Resolution ---
+    let height = height_from_resolution_label(resolution.unwrap_or(""));
+    let res_raw: i32 = match height {
+        h if h >= 2160 => 40,
+        h if h >= 1080 => 28,
+        h if h >= 720  => 16,
+        h if h >= 480  => 6,
+        _              => 0,
+    };
+    let res_score = scale(res_raw, 40, weights.resolution);
+
+    // --- Codec ---
+    let codec = video_codec.unwrap_or("").to_uppercase();
+    let codec_raw: i32 = match codec.as_str() {
+        "HEVC" | "AV1"                        => 20,
+        "VP9"                                  => 14,
+        "H.264" | "AVC"                        => 12,
+        "MPEG2" | "MPEG4" | "XVID" | "DIVX"   => 4,
+        _                                      => 6,
+    };
+    let codec_score = scale(codec_raw, 20, weights.codec);
+
+    // --- Bitrate ---
+    let bitrate_kbps = video_bitrate.unwrap_or(0) / 1000;
+    let bitrate_raw: i32 = if height >= 2160 {
+        if bitrate_kbps >= 15_000 { 20 } else if bitrate_kbps >= 8_000 { 14 }
+        else if bitrate_kbps >= 4_000 { 8 } else { 3 }
+    } else if height >= 1080 {
+        if bitrate_kbps >= 10_000 { 20 } else if bitrate_kbps >= 5_000 { 14 }
+        else if bitrate_kbps >= 2_000 { 8 } else { 3 }
+    } else if height >= 720 {
+        if bitrate_kbps >= 5_000 { 18 } else if bitrate_kbps >= 2_000 { 12 } else { 5 }
+    } else {
+        if bitrate_kbps >= 2_000 { 12 } else { 3 }
+    };
+    let bitrate_score = scale(bitrate_raw, 20, weights.bitrate);
+
+    // --- Audio channels ---
+    let ch_count = channel_count_from_layout(audio_channels.unwrap_or(""));
+    let channels_raw: i32 = match ch_count {
+        c if c >= 8 => 15,
+        c if c >= 6 => 12,
+        2            => 6,
+        _            => 3,
+    };
+    let channels_score = scale(channels_raw, 15, weights.audio_channels);
+
+    // --- Lossless ---
+    let ac = audio_codec.unwrap_or("").to_uppercase();
+    let is_lossless = ["TRUEHD", "DTS-HD MA", "FLAC", "PCM", "LPCM"]
+        .iter()
+        .any(|c| ac.contains(c));
+    let lossless_score = if is_lossless { weights.audio_lossless } else { 0 };
+
+    // --- HDR ---
+    let hdr_score = if has_hdr { weights.hdr } else { 0 };
+
+    let total = res_score + codec_score + bitrate_score + channels_score + lossless_score + hdr_score;
+    let max_total = weights.resolution + weights.codec + weights.bitrate
+        + weights.audio_channels + weights.audio_lossless + weights.hdr;
+
+    grade_from_pct(total, max_total)
+}
+
+/// Scale a raw score (0..raw_max) proportionally to user_max
+#[inline]
+fn scale(raw: i32, raw_max: i32, user_max: i32) -> i32 {
+    if raw_max == 0 { return 0; }
+    (raw as f64 / raw_max as f64 * user_max as f64).round() as i32
+}
+
+/// Convert total/max_total into a letter grade
+#[inline]
+fn grade_from_pct(total: i32, max_total: i32) -> String {
+    if max_total == 0 { return "D".to_string(); }
+    let pct = total * 100 / max_total;
+    match pct {
+        p if p >= 71 => "A".to_string(),
+        p if p >= 48 => "B".to_string(),
+        p if p >= 29 => "C".to_string(),
+        _            => "D".to_string(),
     }
+}
+
+/// Map stored resolution label ("4K", "1080p" …) to pixel height
+fn height_from_resolution_label(label: &str) -> i64 {
+    match label {
+        "4K" | "2160p" => 2160,
+        "1440p"        => 1440,
+        "1080p"        => 1080,
+        "720p"         => 720,
+        "480p"         => 480,
+        _              => 0,
+    }
+}
+
+/// Parse stored channel layout string to channel count
+fn channel_count_from_layout(layout: &str) -> i64 {
+    let l = layout.to_lowercase();
+    if l.contains("7.1") { return 8; }
+    if l.contains("5.1") { return 6; }
+    if l == "stereo" || l == "2.0" { return 2; }
+    if l == "mono" { return 1; }
+    // fallback: try to parse the first number
+    layout.split(|c: char| !c.is_numeric()).find_map(|s| s.parse::<i64>().ok()).unwrap_or(2)
 }
 
 // ============================================================================
@@ -502,8 +619,20 @@ pub async fn analyze_and_update(
     media_version_id: i64,
     file_path: &str,
 ) -> Result<MediaAnalysis> {
+    // Load user-configured score weights (fall back to defaults if not set)
+    let weights: ScoreWeights = match crate::db::queries::get_setting(pool, "score_weights").await {
+        Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
+        _ => ScoreWeights::default(),
+    };
+
     let path = Path::new(file_path);
-    let analysis = analyze_file(path)?;
+    let mut analysis = analyze_file(path)?;
+    // Recompute with actual weights (analyze_file uses defaults internally)
+    analysis.quality_score = compute_quality_score_with_weights(
+        analysis.video.as_ref(),
+        &analysis.audio_tracks,
+        &weights,
+    );
 
     // Update media_version with technical data
     if let Some(ref v) = analysis.video {

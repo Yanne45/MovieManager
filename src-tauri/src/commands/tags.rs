@@ -45,6 +45,16 @@ pub async fn create_genre(state: State<'_, AppState>, name: String, tmdb_id: Opt
 }
 
 #[tauri::command]
+pub async fn delete_genre(state: State<'_, AppState>, id: i64) -> Result<bool, String> {
+    queries::delete_genre(state.db().pool(), id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_genre(state: State<'_, AppState>, id: i64, name: String) -> Result<Option<Genre>, String> {
+    queries::update_genre(state.db().pool(), id, &name).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_movie_genres(state: State<'_, AppState>, movie_id: i64) -> Result<Vec<Genre>, String> {
     queries::get_movie_genres(state.db().pool(), movie_id).await.map_err(|e| e.to_string())
 }

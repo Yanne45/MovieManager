@@ -24,21 +24,21 @@ pub async fn get_library(pool: &SqlitePool, id: i64) -> Result<Option<Library>> 
 
 pub async fn create_library(pool: &SqlitePool, input: &CreateLibrary) -> Result<Library> {
     let row = sqlx::query_as::<_, Library>(
-        "INSERT INTO libraries (name, path, type, notes)
-         VALUES (?, ?, ?, ?)
+        "INSERT INTO libraries (name, path, type, notes, volume_label)
+         VALUES (?, ?, ?, ?, ?)
          RETURNING *"
     )
     .bind(&input.name)
     .bind(&input.path)
     .bind(&input.lib_type)
     .bind(&input.notes)
+    .bind(&input.volume_label)
     .fetch_one(pool)
     .await?;
     Ok(row)
 }
 
 pub async fn update_library(pool: &SqlitePool, id: i64, input: &UpdateLibrary) -> Result<Option<Library>> {
-    // Build dynamic update
     let existing = get_library(pool, id).await?;
     let Some(existing) = existing else { return Ok(None) };
 
@@ -47,10 +47,11 @@ pub async fn update_library(pool: &SqlitePool, id: i64, input: &UpdateLibrary) -
     let lib_type = input.lib_type.as_deref().unwrap_or(&existing.lib_type);
     let is_online = input.is_online.unwrap_or(existing.is_online);
     let notes = input.notes.as_deref().or(existing.notes.as_deref());
+    let volume_label = input.volume_label.as_deref().or(existing.volume_label.as_deref());
 
     let row = sqlx::query_as::<_, Library>(
         "UPDATE libraries SET name = ?, path = ?, type = ?, is_online = ?, notes = ?,
-         updated_at = datetime('now')
+         volume_label = ?, updated_at = datetime('now')
          WHERE id = ? RETURNING *"
     )
     .bind(name)
@@ -58,6 +59,7 @@ pub async fn update_library(pool: &SqlitePool, id: i64, input: &UpdateLibrary) -
     .bind(lib_type)
     .bind(is_online)
     .bind(notes)
+    .bind(volume_label)
     .bind(id)
     .fetch_optional(pool)
     .await?;
@@ -83,6 +85,23 @@ pub async fn get_movies(pool: &SqlitePool) -> Result<Vec<Movie>> {
     .fetch_all(pool)
     .await?;
     Ok(rows)
+}
+
+pub async fn get_movie_file_locations(pool: &SqlitePool) -> Result<Vec<MovieFileLocation>> {
+    Ok(sqlx::query_as::<_, MovieFileLocation>(
+        "SELECT mv.owner_id AS movie_id,
+                l.volume_label,
+                mf.file_path,
+                mf.file_name,
+                l.name AS library_name
+         FROM media_versions mv
+         JOIN media_files mf ON mf.media_version_id = mv.id
+         JOIN libraries l ON l.id = mf.library_id
+         WHERE mv.owner_type = 'movie'
+         GROUP BY mv.owner_id
+         ORDER BY mv.owner_id"
+    )
+    .fetch_all(pool).await?)
 }
 
 pub async fn get_movie_file_sizes(pool: &SqlitePool) -> Result<Vec<(i64, i64)>> {
@@ -718,6 +737,22 @@ pub async fn create_genre(pool: &SqlitePool, name: &str, tmdb_id: Option<i64>) -
     .fetch_one(pool).await?)
 }
 
+pub async fn delete_genre(pool: &SqlitePool, id: i64) -> Result<bool> {
+    let result = sqlx::query("DELETE FROM genres WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn update_genre(pool: &SqlitePool, id: i64, name: &str) -> Result<Option<Genre>> {
+    Ok(sqlx::query_as::<_, Genre>(
+        "UPDATE genres SET name = ? WHERE id = ? RETURNING *"
+    )
+    .bind(name).bind(id)
+    .fetch_optional(pool).await?)
+}
+
 pub async fn get_movie_genres(pool: &SqlitePool, movie_id: i64) -> Result<Vec<Genre>> {
     Ok(sqlx::query_as::<_, Genre>(
         "SELECT g.* FROM genres g JOIN movie_genres mg ON g.id = mg.genre_id
@@ -987,3 +1022,31 @@ pub async fn get_wishlist_movies(pool: &SqlitePool, limit: i64) -> Result<Vec<Su
     .fetch_all(pool)
     .await?)
 }
+
+// ============================================================================
+// App settings
+// ============================================================================
+
+pub async fn get_setting(pool: &SqlitePool, key: &str) -> Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT value FROM app_settings WHERE key = ?"
+    )
+    .bind(key)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(v,)| v))
+}
+
+pub async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO app_settings (key, value, updated_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+    )
+    .bind(key)
+    .bind(value)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+

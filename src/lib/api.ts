@@ -36,6 +36,7 @@ export interface Library {
   total_files: number;
   total_size: number;
   notes: string | null;
+  volume_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,7 +75,16 @@ export interface Movie {
   updated_at: string;
 }
 
+export interface MovieFileLocation {
+  movie_id: number;
+  volume_label: string | null;
+  file_path: string;
+  file_name: string;
+  library_name: string;
+}
+
 export const getMovies = () => invoke<Movie[]>("get_movies");
+export const getMovieFileLocations = () => invoke<MovieFileLocation[]>("get_movie_file_locations");
 export const getMovieFileSizes = () => invoke<[number, number][]>("get_movie_file_sizes");
 export const getMovie = (id: number) => invoke<Movie | null>("get_movie", { id });
 export const createMovie = (input: { title: string; year?: number; runtime?: number }) =>
@@ -678,6 +688,9 @@ export interface Genre {
 export const getGenres = () => invoke<Genre[]>("get_genres");
 export const createGenre = (name: string, tmdbId?: number) =>
   invoke<Genre>("create_genre", { name, tmdbId });
+export const updateGenre = (id: number, name: string) =>
+  invoke<Genre | null>("update_genre", { id, name });
+export const deleteGenre = (id: number) => invoke<boolean>("delete_genre", { id });
 export const getMovieGenres = (movieId: number) =>
   invoke<Genre[]>("get_movie_genres", { movieId });
 
@@ -949,3 +962,37 @@ export const previewScanPaths = (paths: string[]) =>
 
 export const importFiles = (files: ImportFileInput[]) =>
   invoke<ImportFileResult[]>("import_files", { files });
+
+// ============================================================================
+// Score weights / settings
+// ============================================================================
+
+export interface ScoreWeights {
+  resolution: number;      // default 40
+  codec: number;           // default 20
+  bitrate: number;         // default 20
+  audio_channels: number;  // default 15
+  audio_lossless: number;  // default 5
+  hdr: number;             // default 5
+}
+
+export const DEFAULT_SCORE_WEIGHTS: ScoreWeights = {
+  resolution: 40,
+  codec: 20,
+  bitrate: 20,
+  audio_channels: 15,
+  audio_lossless: 5,
+  hdr: 5,
+};
+
+export const getScoreWeights = () =>
+  invoke<ScoreWeights>("get_score_weights");
+
+export const setScoreWeights = (weights: ScoreWeights) =>
+  invoke<void>("set_score_weights", { weights });
+
+export const recomputeAllScores = () =>
+  invoke<number>("recompute_all_scores");
+
+export const syncEpisodesFromTmdb = (seriesId: number) =>
+  invoke<number>("sync_episodes_from_tmdb", { seriesId });

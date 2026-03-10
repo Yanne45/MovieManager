@@ -112,14 +112,14 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
                   onDoubleClick={() => handleDoubleClick(s)}
                   style={{
                     cursor: "pointer",
-                    background: isSelected ? "var(--color-primary-soft)" : i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC",
+                    background: isSelected ? "var(--color-primary-soft)" : i % 2 === 0 ? "var(--bg-surface)" : "var(--row-odd-bg)",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = "#F1F5FF";
+                    if (!isSelected) e.currentTarget.style.background = "var(--row-hover-bg)";
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected)
-                      e.currentTarget.style.background = i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC";
+                      e.currentTarget.style.background = i % 2 === 0 ? "var(--bg-surface)" : "var(--row-odd-bg)";
                   }}
                 >
                   <td style={{ padding: "6px 10px", width: 42 }}>
@@ -620,7 +620,7 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
                           opacity: ep.has_file ? 1 : 0.5,
                         }}
                         onMouseEnter={(e) => {
-                          if (!isSelected) e.currentTarget.style.background = "#F1F5FF";
+                          if (!isSelected) e.currentTarget.style.background = "var(--row-hover-bg)";
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected)

@@ -5,7 +5,7 @@ import type { Movie } from "../lib/api";
 import { tmdbImageUrl } from "../lib/api";
 import { useKeyboardShortcuts } from "../lib/useKeyboardShortcuts";
 import { useImage } from "../lib/useImage";
-import { useMovieVersions, useMoviePeople, useSimilarMovies, useMovieFileSizes, useAllEntityImages } from "../lib/hooks";
+import { useMovieVersions, useMoviePeople, useSimilarMovies, useMovieFileSizes, useAllEntityImages, useMovieFileLocations, useVersionFiles, useLibraries, usePerson, usePersonMovies } from "../lib/hooks";
 import { useMovieGenres } from "../lib/hooks";
 import type { ActiveFilters } from "../components/FilterBar";
 import type { ImageRecord } from "../lib/api";
@@ -13,6 +13,8 @@ import { LightboxModal } from "../components/LightboxModal";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface CollectionRef { id: number; name: string; }
+
+type PanelView = { type: "movie"; id: number } | { type: "person"; id: number };
 
 interface ContextMenuState { x: number; y: number; movieIds: number[]; }
 
@@ -32,13 +34,40 @@ interface LibraryPageProps {
 type SortKey = "title" | "year" | "runtime" | "score" | "format" | "size";
 type SortDir = "asc" | "desc";
 
-export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onNavigateToPerson, onFocusSearch, collections = [], onAddToCollection }: LibraryPageProps) {
+export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onNavigateToPerson: _onNavigateToPerson, onFocusSearch, collections = [], onAddToCollection }: LibraryPageProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [panelStack, setPanelStack] = useState<PanelView[]>([]);
   const [multiSelect, setMultiSelect] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("title");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const { data: fileSizeMap } = useMovieFileSizes();
+  const { data: fileLocationMap } = useMovieFileLocations();
+
+  // Select a movie from the table (resets panel sub-navigation)
+  const selectMovie = useCallback((id: number | null) => {
+    setSelectedId(id);
+    setPanelStack([]);
+  }, []);
+
+  // Push a movie into the panel navigation stack (doesn't change table selection)
+  const handlePanelSelectMovie = useCallback((id: number) => {
+    setPanelStack((prev) => [...prev, { type: "movie", id }]);
+  }, []);
+
+  // Push a person into the panel navigation stack
+  const handlePanelSelectPerson = useCallback((id: number) => {
+    setPanelStack((prev) => [...prev, { type: "person", id }]);
+  }, []);
+
+  const handlePanelBack = useCallback(() => {
+    setPanelStack((prev) => prev.slice(0, -1));
+  }, []);
+
+  const handlePanelClose = useCallback(() => {
+    setSelectedId(null);
+    setPanelStack([]);
+  }, []);
 
   const toggleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -135,7 +164,23 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
     return result;
   }, [movies, searchQuery, filters, sortKey, sortDir, fileSizeMap]);
 
+  // The movie currently selected in the table (for keyboard nav + edit shortcut)
   const selected = filtered.find((m) => m.id === selectedId) || null;
+
+  // Panel view: top of stack, or fall back to the table-selected movie
+  const panelView: PanelView | null =
+    panelStack.length > 0
+      ? panelStack[panelStack.length - 1]
+      : selectedId !== null
+      ? { type: "movie", id: selectedId }
+      : null;
+
+  // Movie shown in panel (may not be in filtered list — look in all movies)
+  const panelMovie =
+    panelView?.type === "movie" ? (movies.find((m) => m.id === panelView.id) ?? null) : null;
+
+  const canGoBack = panelStack.length > 0;
+  const panelOpen = panelView !== null && (panelMovie !== null || panelView.type === "person");
 
   // Keyboard navigation
   const selectedIndex = filtered.findIndex((m) => m.id === selectedId);
@@ -144,18 +189,18 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
     onArrowUp: useCallback(() => {
       if (filtered.length === 0) return;
       const idx = selectedIndex > 0 ? selectedIndex - 1 : 0;
-      setSelectedId(filtered[idx].id);
-    }, [filtered, selectedIndex]),
+      selectMovie(filtered[idx].id);
+    }, [filtered, selectedIndex, selectMovie]),
     onArrowDown: useCallback(() => {
       if (filtered.length === 0) return;
       const idx = selectedIndex < filtered.length - 1 ? selectedIndex + 1 : selectedIndex;
-      setSelectedId(filtered[idx].id);
-    }, [filtered, selectedIndex]),
+      selectMovie(filtered[idx].id);
+    }, [filtered, selectedIndex, selectMovie]),
     onEdit: useCallback(() => {
       if (selected && onEditMovie) onEditMovie(selected);
     }, [selected, onEditMovie]),
     onSearch: onFocusSearch,
-    onEscape: useCallback(() => { setSelectedId(null); clearMultiSelect(); }, [clearMultiSelect]),
+    onEscape: useCallback(() => { handlePanelClose(); clearMultiSelect(); }, [handlePanelClose, clearMultiSelect]),
   });
 
   const handleAddBatch = useCallback((collectionId: number) => {
@@ -170,7 +215,7 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <GalleryView
           movies={filtered}
-          onSelect={setSelectedId}
+          onSelect={selectMovie}
           onContextMenu={handleContextMenu}
           multiSelect={multiSelect}
           onMultiToggle={handleMultiToggle}
@@ -206,7 +251,7 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
         <MovieTable
           movies={filtered}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={selectMovie}
           compact={compact}
           onContextMenu={handleContextMenu}
           multiSelect={multiSelect}
@@ -216,6 +261,7 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
           sortDir={sortDir}
           onSort={toggleSort}
           fileSizeMap={fileSizeMap}
+          fileLocationMap={fileLocationMap}
         />
       </div>
 
@@ -228,17 +274,28 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
           background: "var(--bg-surface)",
           overflowY: "auto",
           transition: "margin-right 0.25s ease, opacity 0.2s ease",
-          marginRight: selected ? 0 : -340,
-          opacity: selected ? 1 : 0,
+          marginRight: panelOpen ? 0 : -340,
+          opacity: panelOpen ? 1 : 0,
         }}
       >
-        {selected && (
+        {panelView?.type === "movie" && panelMovie && (
           <MovieDetailPanel
-            movie={selected}
-            onEdit={onEditMovie ? () => onEditMovie(selected) : undefined}
-            onPersonClick={onNavigateToPerson}
-            onSelectMovie={setSelectedId}
-            onClose={() => setSelectedId(null)}
+            movie={panelMovie}
+            onEdit={onEditMovie && panelMovie.id === selectedId ? () => onEditMovie(panelMovie) : undefined}
+            onPersonClick={handlePanelSelectPerson}
+            onSelectMovie={handlePanelSelectMovie}
+            onClose={handlePanelClose}
+            canGoBack={canGoBack}
+            onBack={handlePanelBack}
+          />
+        )}
+        {panelView?.type === "person" && (
+          <PersonMiniPanel
+            personId={panelView.id}
+            canGoBack={canGoBack}
+            onBack={handlePanelBack}
+            onClose={handlePanelClose}
+            onSelectMovie={handlePanelSelectMovie}
           />
         )}
       </div>
@@ -292,6 +349,7 @@ function MovieTable({
   sortDir,
   onSort,
   fileSizeMap,
+  fileLocationMap,
 }: {
   movies: Movie[];
   selectedId: number | null;
@@ -305,6 +363,7 @@ function MovieTable({
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
   fileSizeMap?: Map<number, number>;
+  fileLocationMap?: Map<number, import("../lib/api").MovieFileLocation>;
 }) {
   const columns: { label: string; key: SortKey | null }[] = compact
     ? [
@@ -314,6 +373,7 @@ function MovieTable({
         { label: "Score", key: "score" },
         { label: "Format", key: "format" },
         { label: "Taille", key: "size" },
+        { label: "Emplacement", key: null },
       ]
     : [
         { label: "", key: null },
@@ -323,6 +383,7 @@ function MovieTable({
         { label: "Score", key: "score" },
         { label: "Format", key: "format" },
         { label: "Taille", key: "size" },
+        { label: "Emplacement", key: null },
       ];
 
   return (
@@ -377,23 +438,23 @@ function MovieTable({
               style={{
                 cursor: "pointer",
                 background: multiSelect.has(m.id)
-                  ? "#FEF9C3"
+                  ? "var(--row-multiselect-bg)"
                   : isSelected
                     ? "var(--color-primary-soft)"
                     : i % 2 === 0
                       ? "var(--bg-surface)"
-                      : "#F8F9FC",
+                      : "var(--row-odd-bg)",
                 transition: "background 0.1s",
-                outline: multiSelect.has(m.id) ? "2px solid #F59E0B" : undefined,
+                outline: multiSelect.has(m.id) ? "2px solid var(--warning)" : undefined,
                 outlineOffset: -2,
               }}
               onMouseEnter={(e) => {
-                if (!isSelected) e.currentTarget.style.background = "#F1F5FF";
+                if (!isSelected) e.currentTarget.style.background = "var(--row-hover-bg)";
               }}
               onMouseLeave={(e) => {
                 if (!isSelected)
                   e.currentTarget.style.background =
-                    i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC";
+                    i % 2 === 0 ? "var(--bg-surface)" : "var(--row-odd-bg)";
               }}
             >
               {!compact && (
@@ -440,11 +501,44 @@ function MovieTable({
               <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)", fontSize: 12 }}>
                 {formatFileSize(fileSizeMap?.get(m.id) ?? 0)}
               </td>
+              <td style={{ padding: compact ? "4px 10px" : "6px 10px", maxWidth: 180, overflow: "hidden" }}>
+                <LocationBadge loc={fileLocationMap?.get(m.id)} />
+              </td>
             </tr>
           );
         })}
       </tbody>
     </table>
+  );
+}
+
+/** Compact location badge: volume label + filename */
+function LocationBadge({ loc }: { loc: import("../lib/api").MovieFileLocation | undefined }) {
+  if (!loc) return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>—</span>;
+  const label = loc.volume_label || loc.library_name;
+  return (
+    <div title={loc.file_path} style={{ cursor: "default" }}>
+      <div style={{
+        fontSize: 10,
+        fontWeight: 600,
+        color: "var(--color-primary)",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: 9,
+        color: "var(--text-muted)",
+        fontFamily: "monospace",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {loc.file_name}
+      </div>
+    </div>
   );
 }
 
@@ -474,7 +568,126 @@ function MovieDirectorsLine({ movieId }: { movieId: number }) {
 // Movie Detail Panel
 // ============================================================================
 
-function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose }: { movie: Movie; onEdit?: () => void; onPersonClick?: (personId: number) => void; onSelectMovie?: (movieId: number) => void; onClose?: () => void }) {
+// ============================================================================
+// Person mini panel — shown when user clicks an actor/director in the movie panel
+// ============================================================================
+
+function PersonMiniPanel({
+  personId, canGoBack, onBack, onClose, onSelectMovie,
+}: {
+  personId: number;
+  canGoBack?: boolean;
+  onBack?: () => void;
+  onClose?: () => void;
+  onSelectMovie?: (movieId: number) => void;
+}) {
+  const { data: person } = usePerson(personId);
+  const { data: personMovies } = usePersonMovies(personId);
+
+  const navBtnStyle: React.CSSProperties = {
+    background: "none", border: "none", cursor: "pointer",
+    fontSize: 16, color: "var(--text-muted)", padding: "2px 6px",
+  };
+
+  return (
+    <div style={{ padding: 14 }}>
+      {/* Navigation header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <button
+          onClick={onBack}
+          title="Retour"
+          style={{ ...navBtnStyle, visibility: canGoBack && onBack ? "visible" : "hidden" }}
+        >
+          ‹
+        </button>
+        <button onClick={onClose} title="Fermer le panneau" style={navBtnStyle}>›</button>
+      </div>
+
+      {/* Photo */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+        <SmartPoster
+          entityType="person"
+          entityId={personId}
+          title={person?.name ?? "…"}
+          tmdbPosterPath={person?.photo_path ?? null}
+          size="large"
+        />
+      </div>
+
+      {/* Name + role */}
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{person?.name ?? "…"}</div>
+        {person?.primary_role && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, textTransform: "capitalize" }}>
+            {person.primary_role}
+          </div>
+        )}
+        {person?.birth_date && (
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+            {person.birth_date}
+            {person.birth_place ? ` — ${person.birth_place}` : ""}
+          </div>
+        )}
+        {person?.death_date && (
+          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>† {person.death_date}</div>
+        )}
+      </div>
+
+      {/* Biography excerpt */}
+      {person?.biography && (
+        <div style={{ marginBottom: 12, textAlign: "left" }}>
+          <SectionTitle>Biographie</SectionTitle>
+          <p style={{
+            fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.55, marginTop: 4,
+            display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {person.biography}
+          </p>
+        </div>
+      )}
+
+      {/* Films */}
+      {personMovies && personMovies.length > 0 && (
+        <div style={{ textAlign: "left" }}>
+          <SectionTitle>Films ({personMovies.length})</SectionTitle>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, justifyContent: "center" }}>
+            {personMovies.map((m) => (
+              <div
+                key={m.movie_id}
+                onClick={() => onSelectMovie?.(m.movie_id)}
+                title={`${m.title}${m.character_name ? ` — ${m.character_name}` : ""}`}
+                style={{ width: 60, textAlign: "center", cursor: "pointer" }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+              >
+                <SmartPoster
+                  entityType="movie"
+                  entityId={m.movie_id}
+                  title={m.title}
+                  tmdbPosterPath={m.poster_path}
+                  size="small"
+                />
+                <div style={{
+                  fontSize: 9, marginTop: 2, fontWeight: 500,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {m.title}
+                </div>
+                {m.year && <div style={{ fontSize: 8, color: "var(--text-muted)" }}>{m.year}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Movie detail panel
+// ============================================================================
+
+function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose, canGoBack, onBack }: { movie: Movie; onEdit?: () => void; onPersonClick?: (personId: number) => void; onSelectMovie?: (movieId: number) => void; onClose?: () => void; canGoBack?: boolean; onBack?: () => void }) {
   const { data: versions } = useMovieVersions(movie.id);
   const { data: people } = useMoviePeople(movie.id);
   const { data: genres } = useMovieGenres(movie.id);
@@ -498,25 +711,30 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 
   return (
     <div style={{ padding: 14, textAlign: "center" }}>
-      {/* Close chevron */}
-      {onClose && (
-        <div style={{ textAlign: "right", marginBottom: 4 }}>
-          <button
-            onClick={onClose}
-            title="Fermer le panneau"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: 16,
-              color: "var(--text-muted)",
-              padding: "2px 6px",
-            }}
-          >
-            ›
-          </button>
-        </div>
-      )}
+      {/* Navigation header: back chevron (left) + close chevron (right) */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <button
+          onClick={onBack}
+          title="Retour"
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 16, color: "var(--text-muted)", padding: "2px 6px",
+            visibility: canGoBack && onBack ? "visible" : "hidden",
+          }}
+        >
+          ‹
+        </button>
+        <button
+          onClick={onClose}
+          title="Fermer le panneau"
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 16, color: "var(--text-muted)", padding: "2px 6px",
+          }}
+        >
+          ›
+        </button>
+      </div>
       {/* Poster — clickable to open lightbox, with small edit icon */}
       <div
         style={{ marginBottom: 10, display: "flex", justifyContent: "center", position: "relative", cursor: "pointer" }}
@@ -611,21 +829,20 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
         </p>
       )}
 
-      {/* Casting */}
+      {/* Casting — 2 colonnes : réalisation | acteurs */}
       {(directors.length > 0 || actors.length > 0) && (
         <div style={{ marginBottom: 10, textAlign: "left" }}>
           <SectionTitle>Casting</SectionTitle>
-          {directors.length > 0 && (
-            <div style={{ marginBottom: 4 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 8px", alignItems: "start" }}>
+            {/* Réalisation */}
+            <div>
               <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Réalisation</span>
               {directors.map((d) => (
                 <div
                   key={d.person_id}
                   onClick={() => onPersonClick?.(d.person_id)}
                   style={{
-                    fontSize: 10,
-                    color: "var(--text-secondary)",
-                    paddingLeft: 6,
+                    fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6,
                     cursor: onPersonClick ? "pointer" : undefined,
                   }}
                   onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = "var(--color-primary)")}
@@ -635,8 +852,7 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
                 </div>
               ))}
             </div>
-          )}
-          {actors.length > 0 && (
+            {/* Acteurs */}
             <div>
               <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Acteurs</span>
               {actors.slice(0, 6).map((a) => (
@@ -644,9 +860,7 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
                   key={a.person_id}
                   onClick={() => onPersonClick?.(a.person_id)}
                   style={{
-                    fontSize: 10,
-                    color: "var(--text-secondary)",
-                    paddingLeft: 6,
+                    fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6,
                     cursor: onPersonClick ? "pointer" : undefined,
                   }}
                   onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = "var(--color-primary)")}
@@ -664,7 +878,7 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -724,33 +938,6 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
           ))}
         </div>
       )}
-
-      {/* IDs */}
-      <div style={{ marginBottom: 10, textAlign: "left" }}>
-        <SectionTitle>Identifiants</SectionTitle>
-        <div
-          style={{
-            fontSize: 9,
-            color: "var(--text-muted)",
-            display: "grid",
-            gridTemplateColumns: "50px 1fr",
-            rowGap: 2,
-          }}
-        >
-          {movie.tmdb_id && (
-            <>
-              <span>TMDB</span>
-              <span>{movie.tmdb_id}</span>
-            </>
-          )}
-          {movie.imdb_id && (
-            <>
-              <span>IMDb</span>
-              <span>{movie.imdb_id}</span>
-            </>
-          )}
-        </div>
-      </div>
 
       {/* Notes */}
       {movie.notes && (
@@ -820,6 +1007,11 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 // ============================================================================
 
 function VersionCard({ version: v }: { version: import("../lib/api").MediaVersion }) {
+  const { data: files } = useVersionFiles(v.id);
+  const { data: libraries } = useLibraries();
+
+  const libMap = new Map((libraries ?? []).map((l) => [l.id, l]));
+
   const techParts = [
     v.resolution,
     v.video_codec,
@@ -842,28 +1034,65 @@ function VersionCard({ version: v }: { version: import("../lib/api").MediaVersio
         border: "1px solid var(--border)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+      {/* Header: label + score */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ fontSize: 10, fontWeight: 600, flex: 1 }}>
           {v.label || "Version principale"}
         </span>
         {v.quality_score && <ScoreBadge score={v.quality_score} />}
       </div>
-      {techParts.length > 0 && (
-        <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>
-          {techParts.join(" · ")}
+
+      {/* 2-column body: tech info | file locations */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 8px", alignItems: "start" }}>
+        {/* Left: technical data */}
+        <div>
+          {techParts.length > 0 && (
+            <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 1 }}>
+              {techParts.join(" · ")}
+            </div>
+          )}
+          {audioParts.length > 0 && (
+            <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>
+              {audioParts.join(" · ")}
+            </div>
+          )}
+          {v.video_bitrate && (
+            <div style={{ fontSize: 8, color: "var(--text-muted)" }}>
+              {Math.round(v.video_bitrate / 1000)} kbps
+              {v.duration ? ` · ${Math.round(v.duration / 60)} min` : ""}
+            </div>
+          )}
         </div>
-      )}
-      {audioParts.length > 0 && (
-        <div style={{ fontSize: 9, color: "var(--text-muted)" }}>
-          Audio : {audioParts.join(" · ")}
+
+        {/* Right: file locations */}
+        <div>
+          {files && files.map((f) => {
+            const lib = libMap.get(f.library_id);
+            const diskLabel = lib?.volume_label || lib?.name || "Bibliothèque";
+            const relativePath = lib && f.file_path.startsWith(lib.path)
+              ? f.file_path.slice(lib.path.length).replace(/^[\\/]/, "")
+              : f.file_name;
+            return (
+              <div key={f.id} title={f.file_path} style={{ cursor: "default", marginBottom: 2 }}>
+                <div style={{
+                  fontSize: 9, fontWeight: 600,
+                  color: f.is_available ? "var(--color-primary)" : "var(--text-muted)",
+                  display: "flex", alignItems: "center", gap: 3,
+                }}>
+                  <span style={{ fontSize: 7 }}>{f.is_available ? "●" : "○"}</span>
+                  {diskLabel}
+                </div>
+                <div style={{
+                  fontSize: 8, color: "var(--text-muted)", fontFamily: "monospace",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {relativePath}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
-      {v.video_bitrate && (
-        <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>
-          {Math.round(v.video_bitrate / 1000)} kbps
-          {v.duration ? ` · ${Math.round(v.duration / 60)} min` : ""}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TabBar, SectionTitle, EmptyState, LoadingSpinner } from "../components/ui";
+import { TabBar, EmptyState, LoadingSpinner } from "../components/ui";
 import { useExactDuplicates, useProbableDuplicates, useMultiVersionMovies } from "../lib/hooks";
 import type { DuplicateGroup } from "../lib/api";
 

@@ -58,6 +58,9 @@ impl Database {
             ("010_system", include_str!("../../migrations/010_system.sql")),
             ("011_images", include_str!("../../migrations/011_images.sql")),
             ("012_rules_update", include_str!("../../migrations/012_rules_update.sql")),
+            ("013_images_multi", include_str!("../../migrations/013_images_multi.sql")),
+            ("014_volume_label", include_str!("../../migrations/014_volume_label.sql")),
+            ("015_settings", include_str!("../../migrations/015_settings.sql")),
         ];
 
         sqlx::query(

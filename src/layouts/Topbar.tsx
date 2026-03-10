@@ -12,7 +12,7 @@ interface TopbarProps {
   theme: "light" | "dark";
   onThemeToggle: () => void;
   onImport?: () => void;
-  searchRef?: RefObject<HTMLInputElement | null>;
+  searchRef?: RefObject<HTMLInputElement>;
 }
 
 export function Topbar({

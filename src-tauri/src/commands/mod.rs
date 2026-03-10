@@ -19,3 +19,4 @@ pub mod backup;
 pub mod nfo;
 pub mod export;
 pub mod seed;
+pub mod settings;

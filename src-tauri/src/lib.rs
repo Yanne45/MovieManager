@@ -166,6 +166,7 @@ pub fn run() {
             commands::libraries::delete_library,
             // Movie commands
             commands::movies::get_movies,
+            commands::movies::get_movie_file_locations,
             commands::movies::get_movie_file_sizes,
             commands::movies::get_movie,
             commands::movies::create_movie,
@@ -187,6 +188,8 @@ pub fn run() {
             commands::tags::delete_tag,
             commands::tags::get_genres,
             commands::tags::create_genre,
+            commands::tags::delete_genre,
+            commands::tags::update_genre,
             commands::tags::get_movie_genres,
             // Scan commands
             commands::scan::scan_library,
@@ -198,6 +201,7 @@ pub fn run() {
             commands::tmdb::search_movie_tmdb,
             commands::tmdb::search_series_tmdb,
             commands::tmdb::set_tmdb_api_key,
+            commands::tmdb::sync_episodes_from_tmdb,
             // Analysis commands (FFprobe)
             commands::analysis::analyze_media_file,
             commands::analysis::analyze_movie_files,
@@ -283,6 +287,10 @@ pub fn run() {
             commands::export::export_csv,
             // Seed demo data
             commands::seed::seed_demo_data,
+            // Settings commands
+            commands::settings::get_score_weights,
+            commands::settings::set_score_weights,
+            commands::settings::recompute_all_scores,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MovieManager");
