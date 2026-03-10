@@ -1,5 +1,6 @@
 use crate::db::{models::*, queries};
 use crate::AppState;
+use std::collections::HashMap;
 use tauri::State;
 use sqlx;
 
@@ -81,21 +82,17 @@ pub async fn get_series_detail(
     .await
     .map_err(|e| e.to_string())?;
 
-    let mut total_owned: i64 = 0;
-    let mut total_episodes: i64 = 0;
+    let mut episodes_by_season: HashMap<i64, Vec<Episode>> = HashMap::new();
+    for ep in all_episodes {
+        episodes_by_season.entry(ep.season_id).or_default().push(ep);
+    }
 
     let season_details: Vec<SeasonDetail> = seasons
         .into_iter()
         .map(|season| {
-            let episodes: Vec<Episode> = all_episodes
-                .iter()
-                .filter(|e| e.season_id == season.id)
-                .cloned()
-                .collect();
+            let episodes = episodes_by_season.remove(&season.id).unwrap_or_default();
 
             let owned_count = episodes.iter().filter(|e| e.has_file).count() as i64;
-            total_owned += owned_count;
-            total_episodes += episodes.len() as i64;
 
             SeasonDetail {
                 season,
@@ -104,6 +101,9 @@ pub async fn get_series_detail(
             }
         })
         .collect();
+
+    let total_owned: i64 = season_details.iter().map(|s| s.owned_count).sum();
+    let total_episodes: i64 = season_details.iter().map(|s| s.episodes.len() as i64).sum();
 
     Ok(Some(SeriesDetail {
         series,

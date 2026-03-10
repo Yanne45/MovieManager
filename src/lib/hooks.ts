@@ -459,6 +459,7 @@ export function useSearchSeriesTmdb() {
 
 export const queryKeysInbox = {
   items: (status?: string) => ["inboxItems", status] as const,
+  allItems: ["inboxItems"] as const,
   count: ["inboxCount"] as const,
 };
 
@@ -484,7 +485,7 @@ export function useResolveInboxLink() {
       inboxId: number; entityType: string; entityId: number;
     }) => api.resolveInboxLink(inboxId, entityType, entityId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeysInbox.items() });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
       qc.invalidateQueries({ queryKey: queryKeysInbox.count });
     },
   });
@@ -495,7 +496,7 @@ export function useResolveInboxIgnore() {
   return useMutation({
     mutationFn: api.resolveInboxIgnore,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeysInbox.items() });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
       qc.invalidateQueries({ queryKey: queryKeysInbox.count });
     },
   });
@@ -506,7 +507,7 @@ export function useReopenInboxItem() {
   return useMutation({
     mutationFn: api.reopenInboxItem,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeysInbox.items() });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
       qc.invalidateQueries({ queryKey: queryKeysInbox.count });
     },
   });
@@ -517,7 +518,7 @@ export function useDeleteInboxItem() {
   return useMutation({
     mutationFn: api.deleteInboxItem,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeysInbox.items() });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
       qc.invalidateQueries({ queryKey: queryKeysInbox.count });
     },
   });
@@ -597,7 +598,7 @@ export function useImportDroppedPaths() {
       qc.invalidateQueries({ queryKey: queryKeys.movies });
       qc.invalidateQueries({ queryKey: queryKeys.seriesList });
       qc.invalidateQueries({ queryKey: queryKeysInbox.count });
-      qc.invalidateQueries({ queryKey: queryKeysInbox.items() });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
     },
   });
 }

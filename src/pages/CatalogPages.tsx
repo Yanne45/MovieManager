@@ -1023,7 +1023,7 @@ function CollectionDetailPanel({
               }}
             >
               <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 16, textAlign: "center" }}>
-                {item.position + 1}
+                {item.position}
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div

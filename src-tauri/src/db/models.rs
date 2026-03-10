@@ -280,6 +280,16 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TagWithUsageCount {
+    pub id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub auto_generated: bool,
+    pub created_at: NaiveDateTime,
+    pub usage_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Genre {
     pub id: i64,
     pub name: String,

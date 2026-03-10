@@ -11,15 +11,23 @@ pub async fn get_inbox_items(
 ) -> Result<Vec<InboxItem>, String> {
     let db = state.db();
     let pool = db.pool();
-    let filter = status.as_deref().unwrap_or("pending");
-
-    let items = sqlx::query_as::<_, InboxItem>(
-        "SELECT * FROM inbox_items WHERE status = ? ORDER BY created_at DESC"
-    )
-    .bind(filter)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let items = if matches!(status.as_deref(), Some("all")) {
+        sqlx::query_as::<_, InboxItem>(
+            "SELECT * FROM inbox_items ORDER BY created_at DESC"
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        let filter = status.as_deref().unwrap_or("pending");
+        sqlx::query_as::<_, InboxItem>(
+            "SELECT * FROM inbox_items WHERE status = ? ORDER BY created_at DESC"
+        )
+        .bind(filter)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    };
 
     Ok(items)
 }
@@ -44,7 +52,7 @@ pub async fn resolve_inbox_link(
     state: State<'_, AppState>,
     inbox_id: i64,
     entity_type: String,
-    entity_id: i64, // This is actually the TMDB ID from the search
+    entity_id: i64, // TMDB ID from the search
 ) -> Result<(), String> {
     let db = state.db();
     let pool = db.pool();
@@ -60,6 +68,7 @@ pub async fn resolve_inbox_link(
     .ok_or_else(|| format!("Inbox item {} not found", inbox_id))?;
 
     let tmdb_id = entity_id;
+    let mut resolved_entity_id: Option<i64> = None;
     let mut resolution_note = String::from("linked manually");
 
     // Try to get TMDB client for fetching full data
@@ -78,6 +87,7 @@ pub async fn resolve_inbox_link(
                     pool, &match_result, &tmdb_client,
                 ).await {
                     Ok(movie) => {
+                        resolved_entity_id = Some(movie.id);
                         // Create media version + file if we have a file path
                         if let Some(ref file_path) = item.file_path {
                             let file_name = std::path::Path::new(file_path)
@@ -138,6 +148,7 @@ pub async fn resolve_inbox_link(
                     pool, &match_result, &tmdb_client,
                 ).await {
                     Ok(series) => {
+                        resolved_entity_id = Some(series.id);
                         if let Some(cache) = state.image_cache.read().ok().map(|g| g.clone()) {
                             let _ = crate::modules::image_cache::cache_series_images(
                                 pool, &cache, series.id,
@@ -165,7 +176,7 @@ pub async fn resolve_inbox_link(
          WHERE id = ?"
     )
     .bind(&entity_type)
-    .bind(entity_id)
+    .bind(resolved_entity_id)
     .bind(&resolution_note)
     .bind(inbox_id)
     .execute(pool)

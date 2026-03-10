@@ -128,7 +128,7 @@ function AppInner() {
   const librariesQuery = useLibraries();
   const tagsQuery = useTags();
   const rulesQuery = useRules();
-  const inboxQuery = useInboxItems();
+  const inboxQuery = useInboxItems("all");
   const { data: inboxCount = 0 } = useInboxCount();
   const peopleQuery = usePeople();
   const studiosQuery = useStudios();
@@ -695,7 +695,7 @@ function AppInner() {
                     name: t.name,
                     color: t.color ?? null,
                     auto_generated: t.auto_generated,
-                    usage_count: 0,
+                    usage_count: t.usage_count,
                   }))}
                   onCreateTag={handleCreateTag}
                   onDeleteTag={handleDeleteTag}

@@ -256,8 +256,16 @@ pub async fn get_series_completeness(pool: &SqlitePool, series_id: i64) -> Resul
 // Tags
 // ============================================================================
 
-pub async fn get_tags(pool: &SqlitePool) -> Result<Vec<Tag>> {
-    let rows = sqlx::query_as::<_, Tag>("SELECT * FROM tags ORDER BY name")
+pub async fn get_tags(pool: &SqlitePool) -> Result<Vec<TagWithUsageCount>> {
+    let rows = sqlx::query_as::<_, TagWithUsageCount>(
+        "SELECT
+            t.id, t.name, t.color, t.auto_generated, t.created_at,
+            COALESCE(COUNT(mt.movie_id), 0) AS usage_count
+         FROM tags t
+         LEFT JOIN movie_tags mt ON mt.tag_id = t.id
+         GROUP BY t.id
+         ORDER BY t.name"
+    )
         .fetch_all(pool)
         .await?;
     Ok(rows)

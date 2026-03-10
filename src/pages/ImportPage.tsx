@@ -110,27 +110,29 @@ export function ImportPage({
     async (e: React.DragEvent) => {
       e.preventDefault();
       const paths: string[] = [];
-      for (const item of Array.from(e.dataTransfer.items)) {
-        if (item.kind === "file") {
-          const file = item.getAsFile();
-          if (file) {
-            // On Tauri, file.path is available via the webkitRelativePath or
-            // we can get it from the drop event via Tauri's specific API.
-            // Use webkitGetAsEntry path as best-effort or fallback to file.name.
-            const entry = item.webkitGetAsEntry?.();
-            if (entry) {
-              paths.push((entry as { fullPath?: string }).fullPath ?? file.name);
-            }
+
+      // Preferred on Tauri: native absolute paths from dropped files.
+      for (const file of Array.from(e.dataTransfer.files)) {
+        const nativePath = (file as File & { path?: string }).path;
+        if (nativePath) paths.push(nativePath);
+      }
+
+      // Fallback for environments not exposing file.path.
+      if (paths.length === 0) {
+        for (const item of Array.from(e.dataTransfer.items)) {
+          if (item.kind !== "file") continue;
+          const entry = item.webkitGetAsEntry?.();
+          const fullPath = (entry as { fullPath?: string } | null)?.fullPath;
+          if (fullPath && (fullPath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(fullPath))) {
+            paths.push(fullPath);
           }
         }
       }
-      // Also try dataTransfer.files for plain drag from OS
-      if (paths.length === 0) {
-        for (const file of Array.from(e.dataTransfer.files)) {
-          paths.push(file.name);
-        }
+
+      const deduped = Array.from(new Set(paths));
+      if (deduped.length > 0) {
+        await scanPaths(deduped);
       }
-      await scanPaths(paths);
     },
     [scanPaths]
   );

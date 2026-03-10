@@ -326,11 +326,6 @@ pub async fn preview_scan_paths(
     }
 
     // Batch-check which paths are already in media_files
-    let all_paths: Vec<String> = all_discovered
-        .iter()
-        .map(|f| f.path.to_string_lossy().to_string())
-        .collect();
-
     // Build a map of known file_path → movie/series title
     let known_rows: Vec<(String, Option<String>)> = {
         // We query media_files joined to media_versions and then movies/series.
@@ -338,22 +333,23 @@ pub async fn preview_scan_paths(
         let movie_rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT mf.file_path, m.title
              FROM media_files mf
-             JOIN media_versions mv ON mv.id = mf.version_id
-             JOIN movies m ON m.id = mv.entity_id AND mv.entity_type = 'movie'"
+             JOIN media_versions mv ON mv.id = mf.media_version_id
+             JOIN movies m ON m.id = mv.owner_id AND mv.owner_type = 'movie'"
         )
         .fetch_all(pool)
         .await
-        .unwrap_or_default();
+        .map_err(|e| e.to_string())?;
 
         let series_rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT mf.file_path, s.title
              FROM media_files mf
-             JOIN media_versions mv ON mv.id = mf.version_id
-             JOIN series s ON s.id = mv.entity_id AND mv.entity_type = 'series'"
+             JOIN media_versions mv ON mv.id = mf.media_version_id
+             JOIN episodes e ON e.id = mv.owner_id AND mv.owner_type = 'episode'
+             JOIN series s ON s.id = e.series_id"
         )
         .fetch_all(pool)
         .await
-        .unwrap_or_default();
+        .map_err(|e| e.to_string())?;
 
         movie_rows.into_iter().map(|(p, t)| (p, Some(t)))
             .chain(series_rows.into_iter().map(|(p, t)| (p, Some(t))))
@@ -366,7 +362,6 @@ pub async fn preview_scan_paths(
     // Build preview list
     let previews: Vec<ScannedFilePreview> = all_discovered
         .iter()
-        .filter(|f| all_paths.contains(&f.path.to_string_lossy().to_string()))
         .map(|f| {
             let file_path = f.path.to_string_lossy().to_string();
             let file_name = f.path.file_name()
@@ -493,8 +488,8 @@ async fn import_single_file(
                     .map_err(|e| e.to_string())?;
 
                 if default_lib_id > 0 {
-                    attach_file_to_entity(
-                        pool, "series", series.id, &input.file_path, default_lib_id,
+                    attach_file_to_series_episode(
+                        pool, series.id, &input.file_path, default_lib_id,
                     ).await?;
                 }
 
@@ -510,17 +505,12 @@ async fn import_single_file(
         Ok("imported".to_string())
     } else {
         // No TMDB match — send to inbox with user-edited data
-        let category = match input.entity_type.as_str() {
-            "episode" => "episode",
-            _ => "unrecognized",
-        };
-
         sqlx::query(
             "INSERT OR IGNORE INTO inbox_items
              (category, status, file_path, parsed_title, parsed_year)
              VALUES (?, 'pending', ?, ?, ?)"
         )
-        .bind(category)
+        .bind("unrecognized")
         .bind(&input.file_path)
         .bind(&input.title)
         .bind(input.year)
@@ -568,6 +558,85 @@ async fn attach_file_to_entity(
     crate::db::queries::create_media_file(
         pool, version.id, library_id, file_path, &file_name, Some(file_size),
     )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Attach a file to a series by resolving/creating an episode owner.
+/// The media schema supports owner_type = movie|episode, not series.
+async fn attach_file_to_series_episode(
+    pool: &sqlx::SqlitePool,
+    series_id: i64,
+    file_path: &str,
+    library_id: i64,
+) -> Result<(), String> {
+    let file_name = std::path::Path::new(file_path)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("");
+    let parsed = crate::modules::filename_parser::parse_filename(file_name);
+    let season_number = parsed.season.unwrap_or(1);
+    let episode_number = parsed.episodes.first().copied().unwrap_or(1);
+
+    let season_id: i64 = match sqlx::query_as::<_, (i64,)>(
+        "SELECT id FROM seasons WHERE series_id = ? AND season_number = ?"
+    )
+    .bind(series_id)
+    .bind(season_number)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())? {
+        Some((id,)) => id,
+        None => {
+            let (id,): (i64,) = sqlx::query_as(
+                "INSERT INTO seasons (series_id, season_number, title, updated_at)
+                 VALUES (?, ?, ?, datetime('now'))
+                 RETURNING id"
+            )
+            .bind(series_id)
+            .bind(season_number)
+            .bind(format!("Season {}", season_number))
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            id
+        }
+    };
+
+    let episode_id: i64 = match sqlx::query_as::<_, (i64,)>(
+        "SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?"
+    )
+    .bind(season_id)
+    .bind(episode_number)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())? {
+        Some((id,)) => id,
+        None => {
+            let (id,): (i64,) = sqlx::query_as(
+                "INSERT INTO episodes (series_id, season_id, episode_number, has_file, updated_at)
+                 VALUES (?, ?, ?, 0, datetime('now'))
+                 RETURNING id"
+            )
+            .bind(series_id)
+            .bind(season_id)
+            .bind(episode_number)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            id
+        }
+    };
+
+    attach_file_to_entity(pool, "episode", episode_id, file_path, library_id).await?;
+
+    sqlx::query(
+        "UPDATE episodes SET has_file = 1, updated_at = datetime('now') WHERE id = ?"
+    )
+    .bind(episode_id)
+    .execute(pool)
     .await
     .map_err(|e| e.to_string())?;
 

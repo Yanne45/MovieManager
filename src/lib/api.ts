@@ -184,6 +184,7 @@ export interface Tag {
   color: string | null;
   auto_generated: boolean;
   created_at: string;
+  usage_count: number;
 }
 
 export const getTags = () => invoke<Tag[]>("get_tags");

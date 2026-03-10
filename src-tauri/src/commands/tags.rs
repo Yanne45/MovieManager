@@ -3,7 +3,7 @@ use crate::AppState;
 use tauri::State;
 
 #[tauri::command]
-pub async fn get_tags(state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
+pub async fn get_tags(state: State<'_, AppState>) -> Result<Vec<TagWithUsageCount>, String> {
     queries::get_tags(state.db().pool())
         .await
         .map_err(|e| e.to_string())
