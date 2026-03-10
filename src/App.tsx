@@ -115,6 +115,7 @@ function AppInner() {
   const [editingSeries, setEditingSeries] = useState<Series | null>(null);
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
   const [editingStudio, setEditingStudio] = useState<StudioFull | null>(null);
+  const [navigateToPersonId, setNavigateToPersonId] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
 
@@ -215,6 +216,11 @@ function AppInner() {
   const handleEditStudio = useCallback((studio: StudioFull) => {
     setEditingStudio(studio);
     setPage("edit_studio");
+  }, []);
+
+  const handleNavigateToPerson = useCallback((personId: number) => {
+    setNavigateToPersonId(personId);
+    setPage("actors");
   }, []);
 
   // ── Drag & drop ──
@@ -581,6 +587,7 @@ function AppInner() {
                   searchQuery={searchQuery}
                   filters={filters}
                   onEditMovie={handleEditMovie}
+                  onNavigateToPerson={handleNavigateToPerson}
                   onFocusSearch={() => searchRef.current?.focus()}
                   collections={collectionsQuery.data?.map((c) => ({ id: c.id, name: c.name })) ?? []}
                   onAddToCollection={handleAddMovieToCollection}
@@ -595,6 +602,7 @@ function AppInner() {
                   searchQuery={searchQuery}
                   filters={filters}
                   onSelectSeries={handleSelectSeries}
+                  onEditSeries={handleEditSeries}
                 />,
                 "Chargement des séries…"
               )}
@@ -608,6 +616,7 @@ function AppInner() {
                     <SeriesDetailPage
                       detail={seriesDetailQuery.data}
                       onBack={() => setPage("series")}
+                      onEdit={() => handleEditSeries(seriesDetailQuery.data!)}
                     />
                   )
             )}
@@ -662,7 +671,13 @@ function AppInner() {
 
             {page === "actors" &&
               withLoadingError(peopleQuery,
-                <ActorsPage actors={peopleQuery.data ?? []} searchQuery={searchQuery} onEditPerson={handleEditPerson} />,
+                <ActorsPage
+                  actors={peopleQuery.data ?? []}
+                  searchQuery={searchQuery}
+                  onEditPerson={handleEditPerson}
+                  initialSelectedId={navigateToPersonId}
+                  onSelectedConsumed={() => setNavigateToPersonId(null)}
+                />,
                 "Chargement des acteurs…"
               )}
 

@@ -5,9 +5,12 @@ import type { Movie } from "../lib/api";
 import { tmdbImageUrl } from "../lib/api";
 import { useKeyboardShortcuts } from "../lib/useKeyboardShortcuts";
 import { useImage } from "../lib/useImage";
-import { useMovieVersions, useMoviePeople, useSimilarMovies } from "../lib/hooks";
+import { useMovieVersions, useMoviePeople, useSimilarMovies, useMovieFileSizes, useAllEntityImages } from "../lib/hooks";
 import { useMovieGenres } from "../lib/hooks";
 import type { ActiveFilters } from "../components/FilterBar";
+import type { ImageRecord } from "../lib/api";
+import { LightboxModal } from "../components/LightboxModal";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface CollectionRef { id: number; name: string; }
 
@@ -20,15 +23,33 @@ interface LibraryPageProps {
   searchQuery: string;
   filters?: ActiveFilters;
   onEditMovie?: (movie: Movie) => void;
+  onNavigateToPerson?: (personId: number) => void;
   onFocusSearch?: () => void;
   collections?: CollectionRef[];
   onAddToCollection?: (movieId: number, collectionId: number) => void;
 }
 
-export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onFocusSearch, collections = [], onAddToCollection }: LibraryPageProps) {
+type SortKey = "title" | "year" | "runtime" | "score" | "format" | "size";
+type SortDir = "asc" | "desc";
+
+export function LibraryPage({ movies, viewMode, compact = false, searchQuery, filters, onEditMovie, onNavigateToPerson, onFocusSearch, collections = [], onAddToCollection }: LibraryPageProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [multiSelect, setMultiSelect] = useState<Set<number>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("title");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const { data: fileSizeMap } = useMovieFileSizes();
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return key;
+      }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
 
   const handleMultiToggle = useCallback((movieId: number) => {
     setMultiSelect((prev) => {
@@ -85,8 +106,34 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
       // are loaded per-movie. For now, genre filter is a no-op placeholder.
     }
 
+    // Sort
+    const scoreOrder: Record<string, number> = { A: 4, B: 3, C: 2, D: 1 };
+    const dir = sortDir === "asc" ? 1 : -1;
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "title":
+          cmp = a.title.localeCompare(b.title);
+          break;
+        case "year":
+          cmp = (a.year ?? 0) - (b.year ?? 0);
+          break;
+        case "runtime":
+          cmp = (a.runtime ?? 0) - (b.runtime ?? 0);
+          break;
+        case "score":
+        case "format":
+          cmp = (scoreOrder[a.primary_quality_score ?? ""] ?? 0) - (scoreOrder[b.primary_quality_score ?? ""] ?? 0);
+          break;
+        case "size":
+          cmp = (fileSizeMap?.get(a.id) ?? 0) - (fileSizeMap?.get(b.id) ?? 0);
+          break;
+      }
+      return cmp * dir;
+    });
+
     return result;
-  }, [movies, searchQuery, filters]);
+  }, [movies, searchQuery, filters, sortKey, sortDir, fileSizeMap]);
 
   const selected = filtered.find((m) => m.id === selectedId) || null;
 
@@ -127,6 +174,7 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
           onContextMenu={handleContextMenu}
           multiSelect={multiSelect}
           onMultiToggle={handleMultiToggle}
+          onDoubleClick={onEditMovie}
         />
         {multiSelect.size > 0 && (
           <SelectionBar
@@ -152,7 +200,7 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
+    <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative", height: 0, minHeight: "100%" }}>
       {/* Table */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         <MovieTable
@@ -163,6 +211,11 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
           onContextMenu={handleContextMenu}
           multiSelect={multiSelect}
           onMultiToggle={handleMultiToggle}
+          onDoubleClick={onEditMovie}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={toggleSort}
+          fileSizeMap={fileSizeMap}
         />
       </div>
 
@@ -179,7 +232,15 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
           opacity: selected ? 1 : 0,
         }}
       >
-        {selected && <MovieDetailPanel movie={selected} />}
+        {selected && (
+          <MovieDetailPanel
+            movie={selected}
+            onEdit={onEditMovie ? () => onEditMovie(selected) : undefined}
+            onPersonClick={onNavigateToPerson}
+            onSelectMovie={setSelectedId}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
       </div>
 
       {multiSelect.size > 0 && (
@@ -210,6 +271,14 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
 // Movie Table
 // ============================================================================
 
+function formatFileSize(bytes: number): string {
+  if (bytes <= 0) return "—";
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb.toFixed(1)} Go`;
+  const mb = bytes / (1024 * 1024);
+  return `${Math.round(mb)} Mo`;
+}
+
 function MovieTable({
   movies,
   selectedId,
@@ -218,6 +287,11 @@ function MovieTable({
   onContextMenu,
   multiSelect = new Set(),
   onMultiToggle,
+  onDoubleClick,
+  sortKey,
+  sortDir,
+  onSort,
+  fileSizeMap,
 }: {
   movies: Movie[];
   selectedId: number | null;
@@ -226,7 +300,31 @@ function MovieTable({
   onContextMenu?: (e: React.MouseEvent, movieId: number) => void;
   multiSelect?: Set<number>;
   onMultiToggle?: (id: number) => void;
+  onDoubleClick?: (movie: Movie) => void;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+  fileSizeMap?: Map<number, number>;
 }) {
+  const columns: { label: string; key: SortKey | null }[] = compact
+    ? [
+        { label: "Titre", key: "title" },
+        { label: "Année", key: "year" },
+        { label: "Durée", key: "runtime" },
+        { label: "Score", key: "score" },
+        { label: "Format", key: "format" },
+        { label: "Taille", key: "size" },
+      ]
+    : [
+        { label: "", key: null },
+        { label: "Titre", key: "title" },
+        { label: "Année", key: "year" },
+        { label: "Durée", key: "runtime" },
+        { label: "Score", key: "score" },
+        { label: "Format", key: "format" },
+        { label: "Taille", key: "size" },
+      ];
+
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
       <thead>
@@ -238,12 +336,10 @@ function MovieTable({
             zIndex: 1,
           }}
         >
-          {(compact
-            ? ["Titre", "Année", "Durée", "Score", "Format"]
-            : ["", "Titre", "Année", "Durée", "Score", "Format"]
-          ).map((h, i) => (
+          {columns.map((col, i) => (
             <th
               key={i}
+              onClick={() => col.key && onSort(col.key)}
               style={{
                 padding: "8px 10px",
                 textAlign: "left",
@@ -252,9 +348,16 @@ function MovieTable({
                 fontSize: 12,
                 borderBottom: "1px solid var(--border)",
                 whiteSpace: "nowrap",
+                cursor: col.key ? "pointer" : "default",
+                userSelect: "none",
               }}
             >
-              {h}
+              {col.label}
+              {col.key && col.key === sortKey && (
+                <span style={{ marginLeft: 4, fontSize: 10 }}>
+                  {sortDir === "asc" ? "▲" : "▼"}
+                </span>
+              )}
             </th>
           ))}
         </tr>
@@ -269,6 +372,7 @@ function MovieTable({
                 if (e.ctrlKey || e.metaKey) { onMultiToggle?.(m.id); }
                 else { onSelect(m.id); }
               }}
+              onDoubleClick={() => onDoubleClick?.(m)}
               onContextMenu={(e) => onContextMenu?.(e, m.id)}
               style={{
                 cursor: "pointer",
@@ -333,6 +437,9 @@ function MovieTable({
                       ? "720p"
                       : "SD"}
               </td>
+              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)", fontSize: 12 }}>
+                {formatFileSize(fileSizeMap?.get(m.id) ?? 0)}
+              </td>
             </tr>
           );
         })}
@@ -367,19 +474,57 @@ function MovieDirectorsLine({ movieId }: { movieId: number }) {
 // Movie Detail Panel
 // ============================================================================
 
-function MovieDetailPanel({ movie }: { movie: Movie }) {
+function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose }: { movie: Movie; onEdit?: () => void; onPersonClick?: (personId: number) => void; onSelectMovie?: (movieId: number) => void; onClose?: () => void }) {
   const { data: versions } = useMovieVersions(movie.id);
   const { data: people } = useMoviePeople(movie.id);
   const { data: genres } = useMovieGenres(movie.id);
   const { data: similar } = useSimilarMovies(movie.id);
+  const { data: allImages } = useAllEntityImages("movie", movie.id);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const directors = people?.filter((p) => p.role === "director") ?? [];
   const actors = people?.filter((p) => p.role === "actor") ?? [];
 
+  // Separate images by type for display
+  const backdrops = allImages?.filter((img) => img.image_type === "backdrop") ?? [];
+  const photos = allImages?.filter((img) => img.image_type === "photo") ?? [];
+  const galleryImages = [...backdrops, ...photos];
+
+  const openLightbox = (image: ImageRecord) => {
+    const allImgs = allImages ?? [];
+    const idx = allImgs.findIndex((img) => img.id === image.id);
+    if (idx >= 0) setLightboxIndex(idx);
+  };
+
   return (
     <div style={{ padding: 14, textAlign: "center" }}>
-      {/* Poster */}
-      <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}>
+      {/* Close chevron */}
+      {onClose && (
+        <div style={{ textAlign: "right", marginBottom: 4 }}>
+          <button
+            onClick={onClose}
+            title="Fermer le panneau"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 16,
+              color: "var(--text-muted)",
+              padding: "2px 6px",
+            }}
+          >
+            ›
+          </button>
+        </div>
+      )}
+      {/* Poster — clickable to open lightbox, with small edit icon */}
+      <div
+        style={{ marginBottom: 10, display: "flex", justifyContent: "center", position: "relative", cursor: "pointer" }}
+        onClick={() => {
+          const posterImg = allImages?.find((img) => img.image_type === "poster");
+          if (posterImg) openLightbox(posterImg);
+        }}
+      >
         <SmartPoster
           entityType="movie"
           entityId={movie.id}
@@ -387,6 +532,31 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
           tmdbPosterPath={movie.poster_path}
           size="large"
         />
+        {onEdit && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            title="Modifier"
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              width: 24,
+              height: 24,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0,0,0,0.55)",
+              color: "#fff",
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1,
+            }}
+          >
+            ✎
+          </button>
+        )}
       </div>
 
       {/* Title + year */}
@@ -449,7 +619,18 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
             <div style={{ marginBottom: 4 }}>
               <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Réalisation</span>
               {directors.map((d) => (
-                <div key={d.person_id} style={{ fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6 }}>
+                <div
+                  key={d.person_id}
+                  onClick={() => onPersonClick?.(d.person_id)}
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-secondary)",
+                    paddingLeft: 6,
+                    cursor: onPersonClick ? "pointer" : undefined,
+                  }}
+                  onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = "var(--color-primary)")}
+                  onMouseLeave={(e) => onPersonClick && (e.currentTarget.style.color = "var(--text-secondary)")}
+                >
                   {d.name}
                 </div>
               ))}
@@ -459,7 +640,18 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
             <div>
               <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Acteurs</span>
               {actors.slice(0, 6).map((a) => (
-                <div key={a.person_id} style={{ fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6 }}>
+                <div
+                  key={a.person_id}
+                  onClick={() => onPersonClick?.(a.person_id)}
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-secondary)",
+                    paddingLeft: 6,
+                    cursor: onPersonClick ? "pointer" : undefined,
+                  }}
+                  onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = "var(--color-primary)")}
+                  onMouseLeave={(e) => onPersonClick && (e.currentTarget.style.color = "var(--text-secondary)")}
+                >
                   {a.name}
                   {a.character_name && (
                     <span style={{ color: "var(--text-muted)", marginLeft: 3 }}>— {a.character_name}</span>
@@ -473,6 +665,53 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Image Gallery */}
+      {galleryImages.length > 0 && (
+        <div style={{ marginBottom: 10, textAlign: "left" }}>
+          <SectionTitle>Images ({galleryImages.length})</SectionTitle>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+            {galleryImages.map((img) => {
+              const thumbSrc = img.path_thumb ?? img.path_medium;
+              return (
+                <div
+                  key={img.id}
+                  onClick={() => openLightbox(img)}
+                  style={{
+                    width: 72,
+                    height: 48,
+                    borderRadius: 4,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    background: "var(--bg-surface-alt)",
+                    border: "1px solid var(--border)",
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  {thumbSrc ? (
+                    <img
+                      src={convertFileSrc(thumbSrc)}
+                      alt={img.image_type}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      draggable={false}
+                    />
+                  ) : (
+                    <div style={{
+                      width: "100%", height: "100%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "var(--text-muted)", fontSize: 9,
+                    }}>
+                      {img.image_type}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -529,12 +768,15 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
             {similar.map((s) => (
               <div
                 key={s.id}
+                onClick={() => onSelectMovie?.(s.id)}
                 style={{
                   width: 60,
                   textAlign: "center",
-                  cursor: "pointer",
+                  cursor: onSelectMovie ? "pointer" : "default",
                 }}
                 title={`${s.title} (${s.year ?? "?"}) — score ${s.score}`}
+                onMouseEnter={(e) => onSelectMovie && (e.currentTarget.style.opacity = "0.7")}
+                onMouseLeave={(e) => onSelectMovie && (e.currentTarget.style.opacity = "1")}
               >
                 <SmartPoster
                   entityType="movie"
@@ -559,6 +801,15 @@ function MovieDetailPanel({ movie }: { movie: Movie }) {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && allImages && (
+        <LightboxModal
+          images={allImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
       )}
     </div>
   );
@@ -627,12 +878,14 @@ function GalleryView({
   onContextMenu,
   multiSelect = new Set(),
   onMultiToggle,
+  onDoubleClick,
 }: {
   movies: Movie[];
   onSelect: (id: number) => void;
   onContextMenu?: (e: React.MouseEvent, movieId: number) => void;
   multiSelect?: Set<number>;
   onMultiToggle?: (id: number) => void;
+  onDoubleClick?: (movie: Movie) => void;
 }) {
   return (
     <div
@@ -654,6 +907,7 @@ function GalleryView({
           onContextMenu={onContextMenu}
           isMultiSelected={multiSelect.has(m.id)}
           onMultiToggle={onMultiToggle}
+          onDoubleClick={onDoubleClick}
         />
       ))}
     </div>
@@ -670,12 +924,14 @@ function GalleryCard({
   onContextMenu,
   isMultiSelected = false,
   onMultiToggle,
+  onDoubleClick,
 }: {
   movie: Movie;
   onSelect: (id: number) => void;
   onContextMenu?: (e: React.MouseEvent, movieId: number) => void;
   isMultiSelected?: boolean;
   onMultiToggle?: (id: number) => void;
+  onDoubleClick?: (movie: Movie) => void;
 }) {
   const cachedUrl = useImage("movie", m.id, "poster", "medium");
   const posterSrc = cachedUrl || tmdbImageUrl(m.poster_path, "w342");
@@ -686,6 +942,7 @@ function GalleryCard({
         if (e.ctrlKey || e.metaKey) onMultiToggle?.(m.id);
         else onSelect(m.id);
       }}
+      onDoubleClick={() => onDoubleClick?.(m)}
       onContextMenu={(e) => onContextMenu?.(e, m.id)}
       style={{ cursor: "pointer", textAlign: "center" }}
     >

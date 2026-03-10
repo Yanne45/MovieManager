@@ -13,6 +13,7 @@ export const queryKeys = {
   // Content
   libraries: ["libraries"] as const,
   movies: ["movies"] as const,
+  movieFileSizes: ["movieFileSizes"] as const,
   movie: (id: number) => ["movie", id] as const,
   seriesList: ["seriesList"] as const,
   seriesDetail: (id: number) => ["seriesDetail", id] as const,
@@ -104,6 +105,18 @@ export function useMovies() {
   return useQuery({
     queryKey: queryKeys.movies,
     queryFn: api.getMovies,
+  });
+}
+
+export function useMovieFileSizes() {
+  return useQuery({
+    queryKey: queryKeys.movieFileSizes,
+    queryFn: async () => {
+      const rows = await api.getMovieFileSizes();
+      const map = new Map<number, number>();
+      for (const [movieId, size] of rows) map.set(movieId, size);
+      return map;
+    },
   });
 }
 
@@ -464,6 +477,45 @@ export function useDeleteInboxItem() {
 // ============================================================================
 // Image hooks
 // ============================================================================
+
+export function useAllEntityImages(entityType: string, entityId: number | null) {
+  return useQuery({
+    queryKey: ["entityImages", entityType, entityId] as const,
+    queryFn: () => api.getAllEntityImages(entityType, entityId!),
+    enabled: entityId != null && entityId > 0,
+  });
+}
+
+export function useEntityImagesByType(entityType: string, entityId: number | null, imageType: string) {
+  return useQuery({
+    queryKey: ["entityImagesByType", entityType, entityId, imageType] as const,
+    queryFn: () => api.getEntityImagesByType(entityType, entityId!, imageType),
+    enabled: entityId != null && entityId > 0,
+  });
+}
+
+export function useDeleteImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteImageById,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["entityImages"] });
+      qc.invalidateQueries({ queryKey: ["entityImagesByType"] });
+      qc.invalidateQueries({ queryKey: ["imagePaths"] });
+    },
+  });
+}
+
+export function useReorderImages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.reorderEntityImages,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["entityImages"] });
+      qc.invalidateQueries({ queryKey: ["entityImagesByType"] });
+    },
+  });
+}
 
 export function useImagePaths(entityType: string, entityId: number, imageType: string) {
   return useQuery({

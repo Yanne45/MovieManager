@@ -85,6 +85,19 @@ pub async fn get_movies(pool: &SqlitePool) -> Result<Vec<Movie>> {
     Ok(rows)
 }
 
+pub async fn get_movie_file_sizes(pool: &SqlitePool) -> Result<Vec<(i64, i64)>> {
+    let rows = sqlx::query_as::<_, (i64, i64)>(
+        "SELECT mv.owner_id AS movie_id, COALESCE(SUM(mf.file_size), 0) AS total_size
+         FROM media_versions mv
+         JOIN media_files mf ON mf.media_version_id = mv.id
+         WHERE mv.owner_type = 'movie'
+         GROUP BY mv.owner_id"
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 pub async fn get_movie(pool: &SqlitePool, id: i64) -> Result<Option<Movie>> {
     let row = sqlx::query_as::<_, Movie>("SELECT * FROM movies WHERE id = ?")
         .bind(id)

@@ -5,12 +5,153 @@
 //! - Manages cache directory structure
 //! - Returns local paths for UI consumption
 //! - Tracks images in the `images` DB table
+//! - Supports multi-image galleries (backdrop, photo, still, banner)
+//! - Names files using slugified entity name + position
 
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::path::{Path, PathBuf};
+
+// ============================================================================
+// Slugify
+// ============================================================================
+
+/// Convert an entity name to a filesystem-safe slug.
+/// "Inception" → "inception", "The Dark Knight" → "the_dark_knight",
+/// "L'Arnacoeur" → "l_arnacoeur", "Amélie" → "amelie"
+pub fn slugify(name: &str) -> String {
+    let lower = name.to_lowercase();
+    let mut result = String::with_capacity(lower.len());
+    for ch in lower.chars() {
+        match ch {
+            'a'..='z' | '0'..='9' => result.push(ch),
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => result.push('a'),
+            'è' | 'é' | 'ê' | 'ë' => result.push('e'),
+            'ì' | 'í' | 'î' | 'ï' => result.push('i'),
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' => result.push('o'),
+            'ù' | 'ú' | 'û' | 'ü' => result.push('u'),
+            'ý' | 'ÿ' => result.push('y'),
+            'ñ' => result.push('n'),
+            'ç' => result.push('c'),
+            'æ' => { result.push('a'); result.push('e'); }
+            'œ' => { result.push('o'); result.push('e'); }
+            'ß' => { result.push('s'); result.push('s'); }
+            'ð' => result.push('d'),
+            'þ' => { result.push('t'); result.push('h'); }
+            _ => result.push('_'),
+        }
+    }
+    // Collapse consecutive underscores and trim
+    let mut collapsed = String::with_capacity(result.len());
+    let mut prev_underscore = true; // trim leading
+    for ch in result.chars() {
+        if ch == '_' {
+            if !prev_underscore { collapsed.push('_'); }
+            prev_underscore = true;
+        } else {
+            collapsed.push(ch);
+            prev_underscore = false;
+        }
+    }
+    // Trim trailing underscore
+    while collapsed.ends_with('_') {
+        collapsed.pop();
+    }
+    // Truncate to 60 chars
+    if collapsed.len() > 60 {
+        collapsed.truncate(60);
+        while collapsed.ends_with('_') { collapsed.pop(); }
+    }
+    if collapsed.is_empty() {
+        "unnamed".to_string()
+    } else {
+        collapsed
+    }
+}
+
+/// Resolve the slug for an entity by looking up its name in the DB.
+pub async fn resolve_entity_slug(
+    pool: &SqlitePool,
+    entity_type: &str,
+    entity_id: i64,
+) -> Result<String> {
+    let name: Option<(String,)> = match entity_type {
+        "movie" => {
+            sqlx::query_as("SELECT title FROM movies WHERE id = ?")
+                .bind(entity_id).fetch_optional(pool).await?
+        }
+        "series" => {
+            sqlx::query_as("SELECT title FROM series WHERE id = ?")
+                .bind(entity_id).fetch_optional(pool).await?
+        }
+        "season" => {
+            let row: Option<(String, i64)> = sqlx::query_as(
+                "SELECT sr.title, s.season_number FROM seasons s
+                 JOIN series sr ON s.series_id = sr.id WHERE s.id = ?"
+            ).bind(entity_id).fetch_optional(pool).await?;
+            return Ok(match row {
+                Some((title, num)) => format!("{}_s{:02}", slugify(&title), num),
+                None => "unknown_season".to_string(),
+            });
+        }
+        "episode" => {
+            let row: Option<(String, i64, i64)> = sqlx::query_as(
+                "SELECT sr.title, s.season_number, e.episode_number
+                 FROM episodes e
+                 JOIN seasons s ON e.season_id = s.id
+                 JOIN series sr ON s.series_id = sr.id
+                 WHERE e.id = ?"
+            ).bind(entity_id).fetch_optional(pool).await?;
+            return Ok(match row {
+                Some((title, sn, en)) => format!("{}_s{:02}e{:02}", slugify(&title), sn, en),
+                None => "unknown_episode".to_string(),
+            });
+        }
+        "person" => {
+            sqlx::query_as("SELECT name FROM people WHERE id = ?")
+                .bind(entity_id).fetch_optional(pool).await?
+        }
+        "studio" => {
+            sqlx::query_as("SELECT name FROM studios WHERE id = ?")
+                .bind(entity_id).fetch_optional(pool).await?
+        }
+        "collection" => {
+            sqlx::query_as("SELECT name FROM collections WHERE id = ?")
+                .bind(entity_id).fetch_optional(pool).await?
+        }
+        _ => None,
+    };
+    Ok(match name {
+        Some((n,)) => slugify(&n),
+        None => format!("{}_{}", entity_type, entity_id),
+    })
+}
+
+/// Returns true for image types that only allow one image per entity (upsert).
+pub fn is_single_image_type(image_type: &str) -> bool {
+    matches!(image_type, "poster" | "logo" | "thumbnail")
+}
+
+/// Get the next position for a multi-image type.
+pub async fn next_position(
+    pool: &SqlitePool,
+    entity_type: &str,
+    entity_id: i64,
+    image_type: &str,
+) -> Result<i64> {
+    let row: (i64,) = sqlx::query_as(
+        "SELECT COALESCE(MAX(position), -1) + 1 FROM images
+         WHERE entity_type = ? AND entity_id = ? AND image_type = ?"
+    )
+    .bind(entity_type)
+    .bind(entity_id)
+    .bind(image_type)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
 
 // ============================================================================
 // Config
@@ -56,6 +197,7 @@ pub enum ImageType {
     Still,
     Photo,
     Logo,
+    Banner,
 }
 
 impl ImageType {
@@ -66,6 +208,7 @@ impl ImageType {
             ImageType::Still => "stills",
             ImageType::Photo => "photos",
             ImageType::Logo => "logos",
+            ImageType::Banner => "banners",
         }
     }
 
@@ -76,6 +219,19 @@ impl ImageType {
             ImageType::Still => "still",
             ImageType::Photo => "photo",
             ImageType::Logo => "logo",
+            ImageType::Banner => "banner",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "poster" => Some(ImageType::Poster),
+            "backdrop" => Some(ImageType::Backdrop),
+            "still" => Some(ImageType::Still),
+            "photo" => Some(ImageType::Photo),
+            "logo" => Some(ImageType::Logo),
+            "banner" => Some(ImageType::Banner),
+            _ => None,
         }
     }
 }
@@ -109,6 +265,7 @@ impl ImageCache {
         for img_type in &[
             ImageType::Poster, ImageType::Backdrop,
             ImageType::Still, ImageType::Photo, ImageType::Logo,
+            ImageType::Banner,
         ] {
             for size in ImageSize::all() {
                 let dir = self.cache_root
@@ -118,28 +275,28 @@ impl ImageCache {
                     .with_context(|| format!("Failed to create cache dir: {:?}", dir))?;
             }
         }
-        // User-uploaded images directory (single copy, no resize)
+        // User-uploaded images directory
         std::fs::create_dir_all(self.cache_root.join("user"))
             .with_context(|| "Failed to create user image dir")?;
         Ok(())
     }
 
     /// Copy a local image file into the cache and return relative paths.
-    /// The image is stored in `user/{entity_type}_{entity_id}_{image_type}{ext}`.
+    /// Named using entity slug: `user/{slug}_{id}_{pos:03}.{ext}`
     /// All three size fields point to the same file (no resizing).
     pub fn copy_local_image(
         &self,
         source_path: &Path,
-        entity_type: &str,
+        slug: &str,
         entity_id: i64,
-        image_type: &str,
+        position: i64,
     ) -> Result<CachedImage> {
         let ext = source_path
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("jpg");
 
-        let dest_name = format!("{}_{}_{}.{}", entity_type, entity_id, image_type, ext);
+        let dest_name = format!("{}_{}_{:03}.{}", slug, entity_id, position, ext);
         let dest_path = self.cache_root.join("user").join(&dest_name);
 
         std::fs::copy(source_path, &dest_path)
@@ -147,25 +304,30 @@ impl ImageCache {
 
         let rel = format!("user/{}", dest_name);
         Ok(CachedImage {
-            tmdb_path: String::new(), // no TMDB source
+            tmdb_path: String::new(),
             thumbnail: Some(rel.clone()),
             medium: Some(rel.clone()),
             large: Some(rel),
         })
     }
 
-    /// Download a TMDB image in all 3 sizes and return local paths
-    ///
-    /// Returns (thumb_path, medium_path, large_path) relative to cache_root
+    /// Download a TMDB image in all 3 sizes and return local paths.
+    /// Files are named `{slug}_{entity_id}_{position:03}.jpg` in each size directory.
     pub async fn download_image(
         &self,
         tmdb_path: &str,
         image_type: ImageType,
+        slug: &str,
+        entity_id: i64,
+        position: i64,
     ) -> Result<CachedImage> {
-        // Derive filename from TMDB path (e.g. "/abc123.jpg" → "abc123.jpg")
-        let filename = tmdb_path
-            .trim_start_matches('/')
-            .to_string();
+        // Derive extension from TMDB path (usually .jpg)
+        let ext = Path::new(tmdb_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg");
+
+        let filename = format!("{}_{}_{:03}.{}", slug, entity_id, position, ext);
 
         let mut result = CachedImage {
             tmdb_path: tmdb_path.to_string(),
@@ -262,6 +424,61 @@ pub struct CachedImage {
 // DB integration
 // ============================================================================
 
+/// Save an image record — single types (poster/logo/thumbnail) use upsert,
+/// multi types (backdrop/photo/still/banner) always insert a new row.
+pub async fn save_image_record(
+    pool: &SqlitePool,
+    entity_type: &str,
+    entity_id: i64,
+    image_type: &str,
+    cached: &CachedImage,
+    position: i64,
+    slug: &str,
+) -> Result<()> {
+    if is_single_image_type(image_type) {
+        sqlx::query(
+            "INSERT INTO images (entity_type, entity_id, image_type, source_url,
+             path_thumb, path_medium, path_large, position, entity_slug)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+             ON CONFLICT(entity_type, entity_id, image_type) DO UPDATE SET
+             source_url = excluded.source_url,
+             path_thumb = excluded.path_thumb,
+             path_medium = excluded.path_medium,
+             path_large = excluded.path_large,
+             entity_slug = excluded.entity_slug,
+             updated_at = datetime('now')"
+        )
+        .bind(entity_type)
+        .bind(entity_id)
+        .bind(image_type)
+        .bind(&cached.tmdb_path)
+        .bind(&cached.thumbnail)
+        .bind(&cached.medium)
+        .bind(&cached.large)
+        .bind(slug)
+        .execute(pool)
+        .await?;
+    } else {
+        sqlx::query(
+            "INSERT INTO images (entity_type, entity_id, image_type, source_url,
+             path_thumb, path_medium, path_large, position, entity_slug)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(entity_type)
+        .bind(entity_id)
+        .bind(image_type)
+        .bind(&cached.tmdb_path)
+        .bind(&cached.thumbnail)
+        .bind(&cached.medium)
+        .bind(&cached.large)
+        .bind(position)
+        .bind(slug)
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
 /// Cache all images for a movie and update DB
 pub async fn cache_movie_images(
     pool: &SqlitePool,
@@ -276,15 +493,17 @@ pub async fn cache_movie_images(
     .await?;
 
     let Some((poster_path, backdrop_path)) = row else { return Ok(()) };
+    let slug = resolve_entity_slug(pool, "movie", movie_id).await?;
 
     if let Some(ref p) = poster_path {
-        let cached = cache.download_image(p, ImageType::Poster).await?;
-        save_image_record(pool, "movie", movie_id, "poster", &cached).await?;
+        let cached = cache.download_image(p, ImageType::Poster, &slug, movie_id, 0).await?;
+        save_image_record(pool, "movie", movie_id, "poster", &cached, 0, &slug).await?;
     }
 
     if let Some(ref b) = backdrop_path {
-        let cached = cache.download_image(b, ImageType::Backdrop).await?;
-        save_image_record(pool, "movie", movie_id, "backdrop", &cached).await?;
+        let pos = next_position(pool, "movie", movie_id, "backdrop").await?;
+        let cached = cache.download_image(b, ImageType::Backdrop, &slug, movie_id, pos).await?;
+        save_image_record(pool, "movie", movie_id, "backdrop", &cached, pos, &slug).await?;
     }
 
     Ok(())
@@ -296,7 +515,6 @@ pub async fn cache_series_images(
     cache: &ImageCache,
     series_id: i64,
 ) -> Result<()> {
-    // Series poster + backdrop
     let row: Option<(Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT poster_path, backdrop_path FROM series WHERE id = ?"
     )
@@ -304,14 +522,17 @@ pub async fn cache_series_images(
     .fetch_optional(pool)
     .await?;
 
+    let slug = resolve_entity_slug(pool, "series", series_id).await?;
+
     if let Some((poster_path, backdrop_path)) = row {
         if let Some(ref p) = poster_path {
-            let cached = cache.download_image(p, ImageType::Poster).await?;
-            save_image_record(pool, "series", series_id, "poster", &cached).await?;
+            let cached = cache.download_image(p, ImageType::Poster, &slug, series_id, 0).await?;
+            save_image_record(pool, "series", series_id, "poster", &cached, 0, &slug).await?;
         }
         if let Some(ref b) = backdrop_path {
-            let cached = cache.download_image(b, ImageType::Backdrop).await?;
-            save_image_record(pool, "series", series_id, "backdrop", &cached).await?;
+            let pos = next_position(pool, "series", series_id, "backdrop").await?;
+            let cached = cache.download_image(b, ImageType::Backdrop, &slug, series_id, pos).await?;
+            save_image_record(pool, "series", series_id, "backdrop", &cached, pos, &slug).await?;
         }
     }
 
@@ -325,8 +546,9 @@ pub async fn cache_series_images(
 
     for (season_id, poster_path) in seasons {
         if let Some(ref p) = poster_path {
-            let cached = cache.download_image(p, ImageType::Poster).await?;
-            save_image_record(pool, "season", season_id, "poster", &cached).await?;
+            let season_slug = resolve_entity_slug(pool, "season", season_id).await?;
+            let cached = cache.download_image(p, ImageType::Poster, &season_slug, season_id, 0).await?;
+            save_image_record(pool, "season", season_id, "poster", &cached, 0, &season_slug).await?;
         }
     }
 
@@ -347,8 +569,10 @@ pub async fn cache_person_images(
     .await?;
 
     if let Some((Some(photo_path),)) = row {
-        let cached = cache.download_image(&photo_path, ImageType::Photo).await?;
-        save_image_record(pool, "person", person_id, "photo", &cached).await?;
+        let slug = resolve_entity_slug(pool, "person", person_id).await?;
+        let pos = next_position(pool, "person", person_id, "photo").await?;
+        let cached = cache.download_image(&photo_path, ImageType::Photo, &slug, person_id, pos).await?;
+        save_image_record(pool, "person", person_id, "photo", &cached, pos, &slug).await?;
     }
     Ok(())
 }
@@ -367,52 +591,22 @@ pub async fn cache_studio_images(
     .await?;
 
     if let Some((Some(logo_path),)) = row {
-        let cached = cache.download_image(&logo_path, ImageType::Logo).await?;
-        save_image_record(pool, "studio", studio_id, "logo", &cached).await?;
+        let slug = resolve_entity_slug(pool, "studio", studio_id).await?;
+        let cached = cache.download_image(&logo_path, ImageType::Logo, &slug, studio_id, 0).await?;
+        save_image_record(pool, "studio", studio_id, "logo", &cached, 0, &slug).await?;
     }
     Ok(())
 }
 
-/// Save an image record to the images table
-async fn save_image_record(
-    pool: &SqlitePool,
-    entity_type: &str,
-    entity_id: i64,
-    image_type: &str,
-    cached: &CachedImage,
-) -> Result<()> {
-    sqlx::query(
-        "INSERT INTO images (entity_type, entity_id, image_type, source_url,
-         path_thumb, path_medium, path_large)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(entity_type, entity_id, image_type) DO UPDATE SET
-         source_url = excluded.source_url,
-         path_thumb = excluded.path_thumb,
-         path_medium = excluded.path_medium,
-         path_large = excluded.path_large,
-         updated_at = datetime('now')"
-    )
-    .bind(entity_type)
-    .bind(entity_id)
-    .bind(image_type)
-    .bind(&cached.tmdb_path)
-    .bind(&cached.thumbnail)
-    .bind(&cached.medium)
-    .bind(&cached.large)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-/// Get cached image paths for an entity
+/// Get all cached images for an entity, ordered by type then position
 pub async fn get_entity_images(
     pool: &SqlitePool,
     entity_type: &str,
     entity_id: i64,
 ) -> Result<Vec<ImageRecord>> {
     let rows = sqlx::query_as::<_, ImageRecord>(
-        "SELECT * FROM images WHERE entity_type = ? AND entity_id = ?"
+        "SELECT * FROM images WHERE entity_type = ? AND entity_id = ?
+         ORDER BY image_type, position"
     )
     .bind(entity_type)
     .bind(entity_id)
@@ -420,6 +614,67 @@ pub async fn get_entity_images(
     .await?;
 
     Ok(rows)
+}
+
+/// Get cached images for an entity filtered by type, ordered by position
+pub async fn get_entity_images_by_type(
+    pool: &SqlitePool,
+    entity_type: &str,
+    entity_id: i64,
+    image_type: &str,
+) -> Result<Vec<ImageRecord>> {
+    let rows = sqlx::query_as::<_, ImageRecord>(
+        "SELECT * FROM images WHERE entity_type = ? AND entity_id = ? AND image_type = ?
+         ORDER BY position"
+    )
+    .bind(entity_type)
+    .bind(entity_id)
+    .bind(image_type)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Delete a single image by its ID and remove files from disk
+pub async fn delete_image_by_id(
+    pool: &SqlitePool,
+    cache: &ImageCache,
+    image_id: i64,
+) -> Result<()> {
+    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT path_thumb, path_medium, path_large FROM images WHERE id = ?"
+    )
+    .bind(image_id)
+    .fetch_optional(pool)
+    .await?;
+
+    sqlx::query("DELETE FROM images WHERE id = ?")
+        .bind(image_id)
+        .execute(pool)
+        .await?;
+
+    // Delete files from disk
+    if let Some((t, m, l)) = row {
+        let root = cache.root();
+        for rel in [t, m, l].into_iter().flatten() {
+            let _ = std::fs::remove_file(root.join(&rel));
+        }
+    }
+    Ok(())
+}
+
+/// Reorder images: accepts a list of image IDs in desired order,
+/// updates their position values (0, 1, 2, ...).
+pub async fn reorder_images(pool: &SqlitePool, image_ids: &[i64]) -> Result<()> {
+    for (pos, id) in image_ids.iter().enumerate() {
+        sqlx::query("UPDATE images SET position = ?, updated_at = datetime('now') WHERE id = ?")
+            .bind(pos as i64)
+            .bind(*id)
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -432,6 +687,8 @@ pub struct ImageRecord {
     pub path_thumb: Option<String>,
     pub path_medium: Option<String>,
     pub path_large: Option<String>,
+    pub position: i64,
+    pub entity_slug: String,
     pub created_at: String,
     pub updated_at: String,
 }

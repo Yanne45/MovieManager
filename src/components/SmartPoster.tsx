@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import type { DragEvent } from "react";
 import { PosterThumb } from "./ui";
 import { useImage } from "../lib/useImage";
-import { tmdbImageUrl } from "../lib/api";
+import { tmdbImageUrl, importLocalImage } from "../lib/api";
 import { ImagePickerModal } from "./ImagePickerModal";
 import type { ImageEntityType, ImageType } from "./ImagePickerModal";
 
@@ -26,6 +27,7 @@ interface SmartPosterProps {
  * 3. Colored placeholder with initials
  *
  * When `editable` is true, clicking opens the ImagePickerModal.
+ * Also supports drag & drop of local image files to replace the poster.
  */
 export function SmartPoster({
   entityType,
@@ -39,6 +41,7 @@ export function SmartPoster({
 }: SmartPosterProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
 
   // Derive image type from entity type
   const imageType: ImageType =
@@ -53,16 +56,60 @@ export function SmartPoster({
   const cachedUrl = useImage(entityType, entityId, imageType, cacheSize);
   const posterUrl = cachedUrl || tmdbImageUrl(tmdbPosterPath, tmdbSize);
 
+  const handleDragOver = useCallback((e: DragEvent) => {
+    if (!editable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, [editable]);
+
+  const handleDragLeave = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (!editable) return;
+
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+
+    // Tauri exposes file.path on dropped files
+    const file = files[0];
+    const path = (file as File & { path?: string }).path;
+    if (!path) return;
+
+    // Check it's an image
+    if (!file.type.startsWith("image/")) return;
+
+    try {
+      await importLocalImage(entityType, entityId, imageType, path);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      console.error("Drop import failed:", err);
+    }
+  }, [editable, entityType, entityId, imageType]);
+
   return (
     <>
       <div
         onClick={editable ? () => setPickerOpen(true) : undefined}
+        onDragOver={editable ? handleDragOver : undefined}
+        onDragLeave={editable ? handleDragLeave : undefined}
+        onDrop={editable ? handleDrop : undefined}
         style={{
           cursor: editable ? "pointer" : undefined,
           position: "relative",
           display: "inline-block",
+          outline: dragOver ? "2px dashed var(--color-primary)" : undefined,
+          outlineOffset: 2,
+          borderRadius: 6,
         }}
-        title={editable ? `Modifier l'image` : undefined}
+        title={editable ? "Modifier l'image (clic ou glisser-déposer)" : undefined}
       >
         <PosterThumb
           key={refreshKey}
@@ -71,7 +118,7 @@ export function SmartPoster({
           size={size}
           color={color}
         />
-        {editable && (
+        {editable && !dragOver && (
           <div
             style={{
               position: "absolute",
@@ -86,6 +133,24 @@ export function SmartPoster({
             }}
           >
             ✎
+          </div>
+        )}
+        {dragOver && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(47, 111, 219, 0.15)",
+              borderRadius: 6,
+              pointerEvents: "none",
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-primary)" }}>
+              Déposer
+            </span>
           </div>
         )}
       </div>

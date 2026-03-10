@@ -10,6 +10,13 @@ pub async fn get_movies(state: State<'_, AppState>) -> Result<Vec<Movie>, String
 }
 
 #[tauri::command]
+pub async fn get_movie_file_sizes(state: State<'_, AppState>) -> Result<Vec<(i64, i64)>, String> {
+    queries::get_movie_file_sizes(state.db().pool())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_movie(
     state: State<'_, AppState>,
     id: i64,

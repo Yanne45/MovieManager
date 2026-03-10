@@ -75,6 +75,7 @@ export interface Movie {
 }
 
 export const getMovies = () => invoke<Movie[]>("get_movies");
+export const getMovieFileSizes = () => invoke<[number, number][]>("get_movie_file_sizes");
 export const getMovie = (id: number) => invoke<Movie | null>("get_movie", { id });
 export const createMovie = (input: { title: string; year?: number; runtime?: number }) =>
   invoke<Movie>("create_movie", { input });
@@ -481,6 +482,32 @@ export const purgeOrphanedImages = () => invoke<number>("purge_orphaned_images")
 
 export const getTmdbImageCandidates = (entityType: string, tmdbId: number) =>
   invoke<TmdbImageCandidate[]>("get_tmdb_image_candidates", { entityType, tmdbId });
+
+// Multi-image support
+export interface ImageRecord {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  image_type: string;
+  source_url: string | null;
+  path_thumb: string | null;
+  path_medium: string | null;
+  path_large: string | null;
+  position: number;
+  entity_slug: string;
+}
+
+export const getAllEntityImages = (entityType: string, entityId: number) =>
+  invoke<ImageRecord[]>("get_all_entity_images", { entityType, entityId });
+
+export const getEntityImagesByType = (entityType: string, entityId: number, imageType: string) =>
+  invoke<ImageRecord[]>("get_entity_images_by_type", { entityType, entityId, imageType });
+
+export const deleteImageById = (imageId: number) =>
+  invoke<void>("delete_image_by_id", { imageId });
+
+export const reorderEntityImages = (imageIds: number[]) =>
+  invoke<void>("reorder_entity_images", { imageIds });
 
 // ============================================================================
 // Drag & drop import

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   ScoreBadge,
   StatusBadge,
@@ -7,11 +7,15 @@ import {
   EmptyState,
 } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
-import type { SeriesListItem, SeriesDetail, Episode } from "../lib/api";
+import type { SeriesListItem, SeriesDetail, Series, Episode } from "../lib/api";
 import type { ActiveFilters } from "../components/FilterBar";
+import { useAllEntityImages } from "../lib/hooks";
+import type { ImageRecord } from "../lib/api";
+import { LightboxModal } from "../components/LightboxModal";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 // ============================================================================
-// Series List Page (table with completeness)
+// Series List Page (table + sliding detail panel)
 // ============================================================================
 
 interface SeriesPageProps {
@@ -19,9 +23,12 @@ interface SeriesPageProps {
   searchQuery: string;
   filters?: ActiveFilters;
   onSelectSeries: (id: number) => void;
+  onEditSeries?: (series: Series) => void;
 }
 
-export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSeries }: SeriesPageProps) {
+export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSeries, onEditSeries }: SeriesPageProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   const filtered = useMemo(() => {
     let result = seriesList;
 
@@ -33,9 +40,6 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
 
     // Filters
     if (filters) {
-      if (filters.score) {
-        // Series don't have a single score — skip for now
-      }
       if (filters.yearFrom) {
         result = result.filter((s) => {
           const year = s.first_air_date ? parseInt(s.first_air_date.slice(0, 4)) : null;
@@ -60,69 +64,350 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
     return result;
   }, [seriesList, searchQuery, filters]);
 
+  const selected = useMemo(
+    () => seriesList.find((s) => s.id === selectedId) ?? null,
+    [seriesList, selectedId]
+  );
+
+  const handleClick = useCallback((s: SeriesListItem) => {
+    setSelectedId((prev) => (prev === s.id ? null : s.id));
+  }, []);
+
+  const handleDoubleClick = useCallback((s: SeriesListItem) => {
+    onEditSeries?.(s);
+  }, [onEditSeries]);
+
   return (
-    <div style={{ flex: 1, overflowY: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: "var(--bg-surface-alt)", position: "sticky", top: 0, zIndex: 1 }}>
-            {["", "Titre", "Années", "Statut", "Saisons", "Complétude", "Genre"].map((h, i) => (
-              <th
-                key={i}
-                style={{
-                  padding: "8px 10px",
-                  textAlign: "left",
-                  fontWeight: 500,
-                  color: "var(--text-secondary)",
-                  fontSize: 12,
-                  borderBottom: "1px solid var(--border)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((s, i) => (
-            <tr
-              key={s.id}
-              onClick={() => onSelectSeries(s.id)}
-              style={{
-                cursor: "pointer",
-                background: i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5FF")}
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background =
-                  i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC")
-              }
-            >
-              <td style={{ padding: "6px 10px", width: 42 }}>
-                <SmartPoster entityType="series" entityId={s.id} title={s.title} tmdbPosterPath={s.poster_path} size="small" />
-              </td>
-              <td style={{ padding: "6px 10px", fontWeight: 500 }}>{s.title}</td>
-              <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
-                {s.first_air_date?.slice(0, 4) || "?"}
-                {s.last_air_date ? `–${s.last_air_date.slice(0, 4)}` : "–…"}
-              </td>
-              <td style={{ padding: "6px 10px" }}>
-                <StatusBadge status={s.status} />
-              </td>
-              <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
-                {s.total_seasons || "—"}
-              </td>
-              <td style={{ padding: "6px 10px" }}>
-                <CompletenessBar
-                  owned={s.owned_episodes}
-                  total={s.total_episodes || 0}
-                />
-              </td>
-              <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>—</td>
+    <div style={{ flex: 1, display: "flex", overflow: "hidden", height: 0, minHeight: "100%" }}>
+      {/* Table */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "var(--bg-surface-alt)", position: "sticky", top: 0, zIndex: 1 }}>
+              {["", "Titre", "Années", "Statut", "Saisons", "Complétude"].map((h, i) => (
+                <th
+                  key={i}
+                  style={{
+                    padding: "8px 10px",
+                    textAlign: "left",
+                    fontWeight: 500,
+                    color: "var(--text-secondary)",
+                    fontSize: 12,
+                    borderBottom: "1px solid var(--border)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filtered.map((s, i) => {
+              const isSelected = s.id === selectedId;
+              return (
+                <tr
+                  key={s.id}
+                  onClick={() => handleClick(s)}
+                  onDoubleClick={() => handleDoubleClick(s)}
+                  style={{
+                    cursor: "pointer",
+                    background: isSelected ? "var(--color-primary-soft)" : i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = "#F1F5FF";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected)
+                      e.currentTarget.style.background = i % 2 === 0 ? "var(--bg-surface)" : "#F8F9FC";
+                  }}
+                >
+                  <td style={{ padding: "6px 10px", width: 42 }}>
+                    <SmartPoster entityType="series" entityId={s.id} title={s.title} tmdbPosterPath={s.poster_path} size="small" />
+                  </td>
+                  <td style={{ padding: "6px 10px", fontWeight: 500 }}>{s.title}</td>
+                  <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+                    {s.first_air_date?.slice(0, 4) || "?"}
+                    {s.last_air_date ? `–${s.last_air_date.slice(0, 4)}` : "–…"}
+                  </td>
+                  <td style={{ padding: "6px 10px" }}>
+                    <StatusBadge status={s.status} />
+                  </td>
+                  <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+                    {s.total_seasons || "—"}
+                  </td>
+                  <td style={{ padding: "6px 10px" }}>
+                    <CompletenessBar
+                      owned={s.owned_episodes}
+                      total={s.total_episodes || 0}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Sliding detail panel */}
+      <div
+        style={{
+          width: 340,
+          flexShrink: 0,
+          borderLeft: "1px solid var(--border)",
+          background: "var(--bg-surface)",
+          overflowY: "auto",
+          transition: "margin-right 0.25s ease, opacity 0.2s ease",
+          marginRight: selected ? 0 : -340,
+          opacity: selected ? 1 : 0,
+        }}
+      >
+        {selected && (
+          <SeriesPreviewPanel
+            series={selected}
+            onEdit={onEditSeries ? () => onEditSeries(selected) : undefined}
+            onViewDetail={() => onSelectSeries(selected.id)}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Series Preview Panel (sidebar with cover, info, synopsis)
+// ============================================================================
+
+function SeriesPreviewPanel({
+  series,
+  onEdit,
+  onViewDetail,
+  onClose,
+}: {
+  series: SeriesListItem;
+  onEdit?: () => void;
+  onViewDetail?: () => void;
+  onClose?: () => void;
+}) {
+  const { data: allImages } = useAllEntityImages("series", series.id);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const galleryImages = allImages?.filter((img) => img.image_type !== "poster") ?? [];
+
+  const openLightbox = (image: ImageRecord) => {
+    const allImgs = allImages ?? [];
+    const idx = allImgs.findIndex((img) => img.id === image.id);
+    if (idx >= 0) setLightboxIndex(idx);
+  };
+
+  const yearRange = [
+    series.first_air_date?.slice(0, 4) || "?",
+    series.last_air_date ? series.last_air_date.slice(0, 4) : "…",
+  ].join("–");
+
+  return (
+    <div style={{ padding: 14, textAlign: "center" }}>
+      {/* Close chevron */}
+      {onClose && (
+        <div style={{ textAlign: "right", marginBottom: 4 }}>
+          <button
+            onClick={onClose}
+            title="Fermer le panneau"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 16,
+              color: "var(--text-muted)",
+              padding: "2px 6px",
+            }}
+          >
+            ›
+          </button>
+        </div>
+      )}
+      {/* Poster with edit icon */}
+      <div
+        style={{ marginBottom: 10, display: "flex", justifyContent: "center", position: "relative", cursor: "pointer" }}
+        onClick={() => {
+          const posterImg = allImages?.find((img) => img.image_type === "poster");
+          if (posterImg) openLightbox(posterImg);
+        }}
+      >
+        <SmartPoster
+          entityType="series"
+          entityId={series.id}
+          title={series.title}
+          tmdbPosterPath={series.poster_path}
+          size="large"
+        />
+        {onEdit && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            title="Modifier"
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              width: 24,
+              height: 24,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0,0,0,0.55)",
+              color: "#fff",
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1,
+            }}
+          >
+            ✎
+          </button>
+        )}
+      </div>
+
+      {/* Title */}
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{series.title}</h2>
+      {series.original_title && series.original_title !== series.title && (
+        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>
+          {series.original_title}
+        </p>
+      )}
+
+      {/* Year + status */}
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>{yearRange}</span>
+        <StatusBadge status={series.status} />
+      </div>
+
+      {/* Seasons & completeness */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+          {series.total_seasons ? `${series.total_seasons} saison${(series.total_seasons || 0) > 1 ? "s" : ""}` : "—"}
+          {" · "}
+          {series.owned_episodes}/{series.total_episodes || 0} épisodes
+        </div>
+        <CompletenessBar
+          owned={series.owned_episodes}
+          total={series.total_episodes || 0}
+          width={200}
+        />
+      </div>
+
+      {/* Synopsis */}
+      {series.overview && (
+        <div style={{ marginBottom: 10, textAlign: "left" }}>
+          <SectionTitle>Synopsis</SectionTitle>
+          <p style={{ fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            {series.overview.length > 500 ? series.overview.slice(0, 500) + "…" : series.overview}
+          </p>
+        </div>
+      )}
+
+      {/* Content rating */}
+      {series.content_rating && (
+        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>
+          Classification : {series.content_rating}
+        </div>
+      )}
+
+      {/* Image Gallery */}
+      {galleryImages.length > 0 && (
+        <div style={{ marginBottom: 10, textAlign: "left" }}>
+          <SectionTitle>Images ({galleryImages.length})</SectionTitle>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+            {galleryImages.map((img) => {
+              const thumbSrc = img.path_thumb ?? img.path_medium;
+              return (
+                <div
+                  key={img.id}
+                  onClick={() => openLightbox(img)}
+                  style={{
+                    width: 72,
+                    height: 48,
+                    borderRadius: 4,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    background: "var(--bg-surface-alt)",
+                    border: "1px solid var(--border)",
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  {thumbSrc ? (
+                    <img
+                      src={convertFileSrc(thumbSrc)}
+                      alt={img.image_type}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      draggable={false}
+                    />
+                  ) : (
+                    <div style={{
+                      width: "100%", height: "100%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "var(--text-muted)", fontSize: 9,
+                    }}>
+                      {img.image_type}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* IDs */}
+      <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <SectionTitle>Identifiants</SectionTitle>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", display: "grid", gridTemplateColumns: "50px 1fr", rowGap: 2 }}>
+          {series.tmdb_id && (<><span>TMDB</span><span>{series.tmdb_id}</span></>)}
+          {series.imdb_id && (<><span>IMDb</span><span>{series.imdb_id}</span></>)}
+          {series.tvdb_id && (<><span>TVDB</span><span>{series.tvdb_id}</span></>)}
+        </div>
+      </div>
+
+      {/* Notes */}
+      {series.notes && (
+        <div style={{ textAlign: "left" }}>
+          <SectionTitle>Notes</SectionTitle>
+          <p style={{ fontSize: 10, color: "var(--text-secondary)" }}>{series.notes}</p>
+        </div>
+      )}
+
+      {/* View detail button */}
+      {onViewDetail && (
+        <div style={{ marginTop: 14 }}>
+          <button
+            onClick={onViewDetail}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              background: "var(--bg-surface-alt)",
+              color: "var(--text-main)",
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            Voir saisons et épisodes →
+          </button>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && allImages && (
+        <LightboxModal
+          images={allImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }
@@ -134,9 +419,10 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
 interface SeriesDetailPageProps {
   detail: SeriesDetail;
   onBack: () => void;
+  onEdit?: () => void;
 }
 
-export function SeriesDetailPage({ detail, onBack }: SeriesDetailPageProps) {
+export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPageProps) {
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<number | null>(null);
 
@@ -197,6 +483,25 @@ export function SeriesDetailPage({ detail, onBack }: SeriesDetailPageProps) {
             />
           </div>
         </div>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            title="Modifier la série"
+            style={{
+              padding: "4px 12px",
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-main)",
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            ✎ Modifier
+          </button>
+        )}
       </div>
 
       {/* 3-column body */}

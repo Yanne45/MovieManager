@@ -166,6 +166,7 @@ pub fn run() {
             commands::libraries::delete_library,
             // Movie commands
             commands::movies::get_movies,
+            commands::movies::get_movie_file_sizes,
             commands::movies::get_movie,
             commands::movies::create_movie,
             commands::movies::update_movie,
@@ -228,6 +229,10 @@ pub fn run() {
             commands::images::get_tmdb_image_candidates,
             commands::images::apply_tmdb_image,
             commands::images::delete_entity_image,
+            commands::images::get_all_entity_images,
+            commands::images::get_entity_images_by_type,
+            commands::images::delete_image_by_id,
+            commands::images::reorder_entity_images,
             // People commands
             commands::people::get_people,
             commands::people::get_person,

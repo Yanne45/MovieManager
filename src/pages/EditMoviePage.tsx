@@ -1,17 +1,18 @@
 import { useState } from "react";
 import type { Movie } from "../lib/api";
-import { updateMovie } from "../lib/api";
-import { UnderlineInput, UnderlineTextarea, TabBar, SectionTitle } from "../components/ui";
+import { useUpdateMovie, useAllEntityImages, useMovieVersions } from "../lib/hooks";
+import { UnderlineInput, UnderlineTextarea, SectionTitle } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
+import { LightboxModal } from "../components/LightboxModal";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface EditMoviePageProps {
   movie: Movie;
-  onSave: (updated: Movie) => void;
+  onSave: () => void;
   onCancel: () => void;
 }
 
 export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
-  const [tab, setTab] = useState("general");
   const [form, setForm] = useState({
     title: movie.title,
     original_title: movie.original_title ?? "",
@@ -27,6 +28,10 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
     owned: movie.owned,
   });
   const [saving, setSaving] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const updateMovie = useUpdateMovie();
+  const { data: allImages = [] } = useAllEntityImages("movie", movie.id);
+  const { data: versions = [] } = useMovieVersions(movie.id);
 
   const set = (field: string, value: string | boolean) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -57,115 +62,168 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
         onCancel();
         return;
       }
-      const result = await updateMovie(movie.id, input);
-      if (result) onSave(result);
-      else onCancel();
+
+      updateMovie.mutate(
+        { id: movie.id, input },
+        {
+          onSuccess: () => onSave(),
+          onError: (e) => console.error("Save failed:", e),
+          onSettled: () => setSaving(false),
+        }
+      );
     } catch (e) {
       console.error("Save failed:", e);
-    } finally {
       setSaving(false);
     }
   };
 
-  const tabs = [
-    { id: "general", label: "Général" },
-    { id: "technique", label: "Technique" },
-    { id: "ids", label: "Identifiants" },
-    { id: "notes", label: "Notes" },
-  ];
+  const galleryImages = allImages.filter((img) => img.image_type !== "poster");
+
+  // Format bitrate for display
+  const fmtBitrate = (bps: number | null) => {
+    if (!bps) return null;
+    return bps >= 1_000_000 ? `${(bps / 1_000_000).toFixed(1)} Mbps` : `${Math.round(bps / 1000)} kbps`;
+  };
 
   return (
-    <div className="h-full flex flex-col" style={{ background: "var(--bg-surface)" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-surface)" }}>
       {/* Header */}
       <div
-        className="flex items-center justify-between px-6 py-4"
-        style={{ borderBottom: "1px solid var(--border)" }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 24px",
+          borderBottom: "1px solid var(--border)",
+          flexShrink: 0,
+        }}
       >
-        <h2 className="text-lg font-semibold" style={{ color: "var(--text-main)" }}>
-          Éditer — {movie.title}
-        </h2>
-        <div className="flex gap-2">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             onClick={onCancel}
-            className="px-4 py-1.5 rounded-lg text-sm"
-            style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            style={{
+              padding: "4px 12px",
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--text-main)",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
           >
-            Annuler
+            &larr; Retour
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-1.5 rounded-lg text-sm text-white"
-            style={{ background: "var(--color-primary)", opacity: saving ? 0.6 : 1 }}
-          >
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </button>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>
+            {movie.title}
+          </span>
         </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: "6px 20px",
+            borderRadius: 6,
+            border: "none",
+            background: "var(--color-primary)",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: saving ? "wait" : "pointer",
+            opacity: saving ? 0.6 : 1,
+          }}
+        >
+          {saving ? "Enregistrement…" : "Enregistrer"}
+        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="px-6 pt-2">
-        <TabBar tabs={tabs} active={tab} onChange={setTab} />
-      </div>
+      {/* Content — 3 columns: poster+tech | fields | images */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 24 }}>
+          {/* Left: Poster + technical info */}
+          <div>
+            <SmartPoster
+              entityType="movie"
+              entityId={movie.id}
+              title={movie.title}
+              tmdbPosterPath={movie.poster_path ?? null}
+              tmdbId={movie.tmdb_id}
+              size="large"
+              editable
+            />
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {tab === "general" && (
-          <>
-            <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-              <SmartPoster
-                entityType="movie"
-                entityId={movie.id}
-                title={movie.title}
-                tmdbPosterPath={movie.poster_path ?? null}
-                tmdbId={movie.tmdb_id}
-                size="medium"
-                editable
-              />
-              <div style={{ flex: 1 }}>
-            <UnderlineInput label="Titre" value={form.title} onChange={(v) => set("title", v)} />
-            <UnderlineInput
-              label="Titre original"
-              value={form.original_title}
-              onChange={(v) => set("original_title", v)}
-            />
-            <UnderlineInput
-              label="Titre de tri"
-              value={form.sort_title}
-              onChange={(v) => set("sort_title", v)}
-              placeholder="Ex: Dark Knight, The"
-            />
-            <div className="flex gap-4">
-              <div className="w-1/3">
-                <UnderlineInput label="Année" value={form.year} onChange={(v) => set("year", v)} />
-              </div>
-              <div className="w-1/3">
-                <UnderlineInput
-                  label="Durée (min)"
-                  value={form.runtime}
-                  onChange={(v) => set("runtime", v)}
-                />
-              </div>
-              <div className="w-1/3">
-                <UnderlineInput
-                  label="Classification"
-                  value={form.content_rating}
-                  onChange={(v) => set("content_rating", v)}
-                />
-              </div>
+            {/* Read-only metadata */}
+            <div style={{ marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
+              {movie.tmdb_id && <div>TMDB : {movie.tmdb_id}</div>}
+              {movie.imdb_id && <div>IMDb : {movie.imdb_id}</div>}
             </div>
-            <UnderlineInput
-              label="Tagline"
-              value={form.tagline}
-              onChange={(v) => set("tagline", v)}
-            />
-            <UnderlineTextarea
-              label="Synopsis"
-              value={form.overview}
-              onChange={(v) => set("overview", v)}
-              rows={5}
-            />
-            <label className="flex items-center gap-2 cursor-pointer" style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+
+            {/* Technical versions */}
+            {versions.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <SectionTitle>Technique</SectionTitle>
+                {versions.map((v) => {
+                  const techLine = [v.resolution, v.video_codec, v.hdr_format, v.container?.toUpperCase()].filter(Boolean).join(" · ");
+                  const audioLine = [v.audio_codec, v.audio_channels ? `${v.audio_channels}ch` : null].filter(Boolean).join(" ");
+                  return (
+                    <div key={v.id} style={{ marginTop: 6, padding: 8, borderRadius: 6, background: "var(--bg-surface-alt)", fontSize: 10 }}>
+                      {v.label && <div style={{ fontWeight: 600, marginBottom: 2 }}>{v.label}</div>}
+                      {techLine && <div style={{ color: "var(--text-secondary)" }}>{techLine}</div>}
+                      {audioLine && <div style={{ color: "var(--text-muted)" }}>{audioLine}</div>}
+                      {v.video_bitrate && <div style={{ color: "var(--text-muted)" }}>Vidéo : {fmtBitrate(v.video_bitrate)}</div>}
+                      {v.audio_bitrate && <div style={{ color: "var(--text-muted)" }}>Audio : {fmtBitrate(v.audio_bitrate)}</div>}
+                      {v.duration && <div style={{ color: "var(--text-muted)" }}>Durée : {Math.round(v.duration / 60)} min</div>}
+                      {v.quality_score && <div style={{ color: "var(--color-primary)", fontWeight: 500 }}>Score : {v.quality_score}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Center: Editable fields */}
+          <div>
+            <SectionTitle>Informations</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+              <UnderlineInput label="Titre" value={form.title} onChange={(v) => set("title", v)} />
+              <UnderlineInput label="Titre original" value={form.original_title} onChange={(v) => set("original_title", v)} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+              <UnderlineInput label="Titre de tri" value={form.sort_title} onChange={(v) => set("sort_title", v)} />
+              <UnderlineInput label="Classification" value={form.content_rating} onChange={(v) => set("content_rating", v)} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+              <UnderlineInput label="Année" value={form.year} onChange={(v) => set("year", v)} />
+              <UnderlineInput label="Durée (min)" value={form.runtime} onChange={(v) => set("runtime", v)} />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <UnderlineInput label="Tagline" value={form.tagline} onChange={(v) => set("tagline", v)} />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <UnderlineTextarea label="Synopsis" value={form.overview} onChange={(v) => set("overview", v)} rows={5} />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <UnderlineTextarea label="Notes" value={form.notes} onChange={(v) => set("notes", v)} rows={3} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+              <UnderlineInput label="TMDB ID" value={form.tmdb_id} onChange={(v) => set("tmdb_id", v)} />
+              <UnderlineInput label="IMDB ID" value={form.imdb_id} onChange={(v) => set("imdb_id", v)} />
+            </div>
+
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 16,
+                cursor: "pointer",
+                color: "var(--text-secondary)",
+                fontSize: 13,
+              }}
+            >
               <input
                 type="checkbox"
                 checked={form.owned}
@@ -173,44 +231,75 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
               />
               Film possédé (décocher pour wishlist)
             </label>
-              </div> {/* flex: 1 */}
-            </div> {/* flex row */}
-          </>
-        )}
-
-        {tab === "technique" && (
-          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
-            <SectionTitle>Informations techniques</SectionTitle>
-            <p className="mt-2">Les données techniques sont extraites automatiquement par FFprobe et ne sont pas éditables manuellement.</p>
-            <p className="mt-1">Score qualité actuel : <strong>{movie.primary_quality_score ?? "—"}</strong></p>
           </div>
-        )}
 
-        {tab === "ids" && (
-          <>
-            <UnderlineInput
-              label="TMDB ID"
-              value={form.tmdb_id}
-              onChange={(v) => set("tmdb_id", v)}
-            />
-            <UnderlineInput
-              label="IMDB ID"
-              value={form.imdb_id}
-              onChange={(v) => set("imdb_id", v)}
-              placeholder="tt1234567"
-            />
-          </>
-        )}
-
-        {tab === "notes" && (
-          <UnderlineTextarea
-            label="Notes personnelles"
-            value={form.notes}
-            onChange={(v) => set("notes", v)}
-            rows={10}
-          />
-        )}
+          {/* Right: Image gallery */}
+          <div>
+            <SectionTitle>Images ({galleryImages.length})</SectionTitle>
+            {galleryImages.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                {galleryImages.map((img, i) => {
+                  const thumbSrc = img.path_thumb ?? img.path_medium;
+                  return (
+                    <div
+                      key={img.id}
+                      onClick={() => setLightboxIndex(i)}
+                      style={{
+                        width: "100%",
+                        aspectRatio: "16/10",
+                        borderRadius: 4,
+                        overflow: "hidden",
+                        cursor: "pointer",
+                        border: "1px solid var(--border)",
+                        position: "relative",
+                      }}
+                    >
+                      {thumbSrc ? (
+                        <img
+                          src={convertFileSrc(thumbSrc)}
+                          alt={img.image_type}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          draggable={false}
+                        />
+                      ) : (
+                        <div style={{
+                          width: "100%", height: "100%",
+                          background: "var(--bg-surface-alt)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          color: "var(--text-muted)", fontSize: 9,
+                        }}>
+                          {img.image_type}
+                        </div>
+                      )}
+                      <div style={{
+                        position: "absolute", bottom: 2, left: 4,
+                        fontSize: 8, color: "rgba(255,255,255,0.7)",
+                        textTransform: "uppercase", letterSpacing: "0.05em",
+                        textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                      }}>
+                        {img.image_type}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8 }}>
+                Aucune image supplémentaire
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <LightboxModal
+          images={galleryImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }

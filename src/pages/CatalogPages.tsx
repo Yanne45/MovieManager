@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { SectionTitle, Tag as TagPill, EmptyState, UnderlineInput } from "../components/ui";
 import { usePersonMovies, useStudioMovies, useCollectionItems, useAddCollectionItem, useRemoveCollectionItem } from "../lib/hooks";
 import { tmdbImageUrl } from "../lib/api";
@@ -32,10 +32,20 @@ interface ActorsPageProps {
   actors: Person[];
   searchQuery: string;
   onEditPerson?: (person: Person) => void;
+  initialSelectedId?: number | null;
+  onSelectedConsumed?: () => void;
 }
 
-export function ActorsPage({ actors, searchQuery, onEditPerson }: ActorsPageProps) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+export function ActorsPage({ actors, searchQuery, onEditPerson, initialSelectedId, onSelectedConsumed }: ActorsPageProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(initialSelectedId ?? null);
+
+  // When navigated from another page with a pre-selected person
+  useEffect(() => {
+    if (initialSelectedId != null) {
+      setSelectedId(initialSelectedId);
+      onSelectedConsumed?.();
+    }
+  }, [initialSelectedId, onSelectedConsumed]);
 
   const filtered = useMemo(() => {
     if (!searchQuery) return actors;
@@ -123,7 +133,7 @@ export function ActorsPage({ actors, searchQuery, onEditPerson }: ActorsPageProp
           transition: "margin-right 0.25s ease, opacity 0.2s ease",
         }}
       >
-        {selected && <PersonDetailPanel person={selected} onEdit={() => onEditPerson?.(selected)} />}
+        {selected && <PersonDetailPanel person={selected} onEdit={() => onEditPerson?.(selected)} onClose={() => setSelectedId(null)} />}
       </div>
     </div>
   );
@@ -131,11 +141,23 @@ export function ActorsPage({ actors, searchQuery, onEditPerson }: ActorsPageProp
 
 // ── Person Detail Panel ──
 
-function PersonDetailPanel({ person, onEdit }: { person: Person; onEdit?: () => void }) {
+function PersonDetailPanel({ person, onEdit, onClose }: { person: Person; onEdit?: () => void; onClose?: () => void }) {
   const { data: filmography = [] } = usePersonMovies(person.id);
 
   return (
     <div style={{ padding: 16 }}>
+      {/* Close chevron */}
+      {onClose && (
+        <div style={{ textAlign: "right", marginBottom: 4 }}>
+          <button
+            onClick={onClose}
+            title="Fermer le panneau"
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text-muted)", padding: "2px 6px" }}
+          >
+            ›
+          </button>
+        </div>
+      )}
       {/* Photo */}
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         <SmartPoster
@@ -376,7 +398,7 @@ export function StudiosPage({ studios, searchQuery, onEditStudio }: StudiosPageP
           transition: "margin-right 0.25s ease, opacity 0.2s ease",
         }}
       >
-        {selected && <StudioDetailPanel studio={selected} onEdit={() => onEditStudio?.(selected)} />}
+        {selected && <StudioDetailPanel studio={selected} onEdit={() => onEditStudio?.(selected)} onClose={() => setSelectedId(null)} />}
       </div>
     </div>
   );
@@ -384,11 +406,23 @@ export function StudiosPage({ studios, searchQuery, onEditStudio }: StudiosPageP
 
 // ── Studio Detail Panel ──
 
-function StudioDetailPanel({ studio, onEdit }: { studio: StudioFull; onEdit?: () => void }) {
+function StudioDetailPanel({ studio, onEdit, onClose }: { studio: StudioFull; onEdit?: () => void; onClose?: () => void }) {
   const { data: movies = [] } = useStudioMovies(studio.id);
 
   return (
     <div style={{ padding: 16 }}>
+      {/* Close chevron */}
+      {onClose && (
+        <div style={{ textAlign: "right", marginBottom: 4 }}>
+          <button
+            onClick={onClose}
+            title="Fermer le panneau"
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text-muted)", padding: "2px 6px" }}
+          >
+            ›
+          </button>
+        </div>
+      )}
       {/* Logo / Name */}
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         <SmartPoster
