@@ -47,13 +47,14 @@ pub enum ProcessingAction {
     Error(String),
 }
 
-/// Process a batch of scanned files (called after scan_directory)
-pub async fn process_scanned_files(
+/// Process a batch of scanned files with an operation_id for change tracking
+pub async fn process_scanned_files_op(
     pool: &SqlitePool,
     library_id: i64,
     files: &[ScannedFile],
     tmdb_client: &TmdbClient,
     image_cache: Option<&ImageCache>,
+    operation_id: Option<&str>,
 ) -> Result<Vec<ProcessingResult>> {
     let mut results = Vec::new();
 
@@ -72,10 +73,10 @@ pub async fn process_scanned_files(
 
         let result = match file.parsed.media_type {
             MediaType::Movie => {
-                process_movie(pool, library_id, file, tmdb_client, image_cache).await
+                process_movie(pool, library_id, file, tmdb_client, image_cache, operation_id).await
             }
             MediaType::Episode => {
-                process_episode(pool, library_id, file, tmdb_client, image_cache).await
+                process_episode(pool, library_id, file, tmdb_client, image_cache, operation_id).await
             }
             MediaType::Unknown => {
                 // Send unknown files to inbox
@@ -109,6 +110,7 @@ async fn process_movie(
     file: &ScannedFile,
     tmdb_client: &TmdbClient,
     image_cache: Option<&ImageCache>,
+    operation_id: Option<&str>,
 ) -> Result<ProcessingResult> {
     let parsed = &file.parsed;
     let title = parsed.title.as_deref().unwrap_or("Unknown");
@@ -124,7 +126,7 @@ async fn process_movie(
     match match_result {
         Some(m) if m.confidence >= CONFIDENCE_THRESHOLD => {
             // High confidence — auto-match
-            let movie = create_or_update_movie(pool, &m, tmdb_client).await?;
+            let movie = create_or_update_movie_with_op(pool, &m, tmdb_client, operation_id).await?;
             let _version = create_media_version_and_file(
                 pool, "movie", movie.id, library_id, file,
             ).await?;
@@ -178,6 +180,7 @@ async fn process_episode(
     file: &ScannedFile,
     tmdb_client: &TmdbClient,
     image_cache: Option<&ImageCache>,
+    operation_id: Option<&str>,
 ) -> Result<ProcessingResult> {
     let parsed = &file.parsed;
     let title = parsed.title.as_deref().unwrap_or("Unknown");
@@ -195,7 +198,7 @@ async fn process_episode(
     match match_result {
         Some(m) if m.confidence >= CONFIDENCE_THRESHOLD => {
             // Find or create series in DB
-            let series = find_or_create_series(pool, &m, tmdb_client).await?;
+            let series = find_or_create_series_with_op(pool, &m, tmdb_client, operation_id).await?;
 
             // Ensure season exists
             let season = ensure_season(pool, &series, season_num, tmdb_client, m.tmdb_id).await?;
@@ -261,11 +264,12 @@ async fn process_episode(
 // DB helpers
 // ============================================================================
 
-/// Create or update a movie from TMDB match
-async fn create_or_update_movie(
+/// Create or update a movie from TMDB match (with operation tracking)
+async fn create_or_update_movie_with_op(
     pool: &SqlitePool,
     match_result: &MatchResult,
     tmdb_client: &TmdbClient,
+    operation_id: Option<&str>,
 ) -> Result<models::Movie> {
     // Check if movie already exists by TMDB ID
     if let Some(existing) = queries::find_movie_by_tmdb(pool, match_result.tmdb_id).await? {
@@ -370,19 +374,22 @@ async fn create_or_update_movie(
     log::info!("Created movie '{}' (TMDB #{})", movie.title, match_result.tmdb_id);
 
     // Record creation in change_log
-    change_log::record_change(
+    if let Err(e) = change_log::record_change_op(
         pool, "movie", movie.id, "title",
-        None, Some(&movie.title), ChangeSource::Tmdb,
-    ).await.ok();
+        None, Some(&movie.title), ChangeSource::Tmdb, operation_id,
+    ).await {
+        log::warn!("Failed to record change log for movie {}: {}", movie.id, e);
+    }
 
     Ok(movie)
 }
 
-/// Find existing series by TMDB ID or create from TMDB data
-async fn find_or_create_series(
+/// Find existing series by TMDB ID or create from TMDB data (with operation tracking)
+async fn find_or_create_series_with_op(
     pool: &SqlitePool,
     match_result: &MatchResult,
     tmdb_client: &TmdbClient,
+    operation_id: Option<&str>,
 ) -> Result<models::Series> {
     // Check existing
     let existing: Option<models::Series> = sqlx::query_as(
@@ -423,10 +430,12 @@ async fn find_or_create_series(
     log::info!("Created series '{}' (TMDB #{})", series.title, match_result.tmdb_id);
 
     // Record creation in change_log
-    change_log::record_change(
+    if let Err(e) = change_log::record_change_op(
         pool, "series", series.id, "title",
-        None, Some(&series.title), ChangeSource::Tmdb,
-    ).await.ok();
+        None, Some(&series.title), ChangeSource::Tmdb, operation_id,
+    ).await {
+        log::warn!("Failed to record change log for series {}: {}", series.id, e);
+    }
 
     Ok(series)
 }
@@ -744,20 +753,40 @@ async fn create_placeholder_series(
 // Public wrappers (for inbox resolution)
 // ============================================================================
 
-/// Public wrapper for create_or_update_movie
+/// Public wrapper for create_or_update_movie (without operation tracking)
 pub async fn create_or_update_movie_pub(
     pool: &SqlitePool,
     match_result: &MatchResult,
     tmdb_client: &TmdbClient,
 ) -> Result<models::Movie> {
-    create_or_update_movie(pool, match_result, tmdb_client).await
+    create_or_update_movie_with_op(pool, match_result, tmdb_client, None).await
 }
 
-/// Public wrapper for find_or_create_series
+/// Public wrapper for create_or_update_movie with operation tracking
+pub async fn create_or_update_movie_pub_op(
+    pool: &SqlitePool,
+    match_result: &MatchResult,
+    tmdb_client: &TmdbClient,
+    operation_id: Option<&str>,
+) -> Result<models::Movie> {
+    create_or_update_movie_with_op(pool, match_result, tmdb_client, operation_id).await
+}
+
+/// Public wrapper for find_or_create_series (without operation tracking)
 pub async fn find_or_create_series_pub(
     pool: &SqlitePool,
     match_result: &MatchResult,
     tmdb_client: &TmdbClient,
 ) -> Result<models::Series> {
-    find_or_create_series(pool, match_result, tmdb_client).await
+    find_or_create_series_with_op(pool, match_result, tmdb_client, None).await
+}
+
+/// Public wrapper for find_or_create_series with operation tracking
+pub async fn find_or_create_series_pub_op(
+    pool: &SqlitePool,
+    match_result: &MatchResult,
+    tmdb_client: &TmdbClient,
+    operation_id: Option<&str>,
+) -> Result<models::Series> {
+    find_or_create_series_with_op(pool, match_result, tmdb_client, operation_id).await
 }

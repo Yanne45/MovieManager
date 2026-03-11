@@ -9,6 +9,7 @@ import {
   deleteEntityImage,
   getImagePaths,
 } from "../lib/api";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, TRANSITION, flex } from "../lib/tokens";
 
 // ============================================================================
 // Types
@@ -169,21 +170,18 @@ export function ImagePickerModal({
         inset: 0,
         background: "rgba(0,0,0,0.55)",
         zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        ...flex.center,
       }}
     >
       {/* Modal */}
       <div
         style={{
-          background: "var(--bg-surface)",
-          borderRadius: 12,
+          background: COLORS.bgSurface,
+          borderRadius: RADIUS.xl,
           width: 680,
           maxWidth: "95vw",
           maxHeight: "88vh",
-          display: "flex",
-          flexDirection: "column",
+          ...flex.col,
           overflow: "hidden",
           boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
         }}
@@ -191,18 +189,16 @@ export function ImagePickerModal({
         {/* Header */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "14px 20px",
-            borderBottom: "1px solid var(--border)",
-            gap: 10,
+            ...flex.rowGap(SP.lg),
+            padding: `${SP.xxl}px ${SP.huge}px`,
+            borderBottom: `1px solid ${COLORS.border}`,
           }}
         >
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>
+            <div style={{ fontSize: 15, fontWeight: WEIGHT.bold, color: COLORS.textMain }}>
               {IMAGE_TYPE_LABEL[imageType]} — {title}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+            <div style={{ fontSize: FONT.base, color: COLORS.textMuted, marginTop: SP.xs }}>
               {entityType}#{entityId}
             </div>
           </div>
@@ -211,10 +207,10 @@ export function ImagePickerModal({
             style={{
               background: "none",
               border: "none",
-              fontSize: 18,
+              fontSize: FONT.xxl,
               cursor: "pointer",
-              color: "var(--text-muted)",
-              padding: "0 4px",
+              color: COLORS.textMuted,
+              padding: `0 ${SP.s}px`,
             }}
           >
             ×
@@ -226,8 +222,8 @@ export function ImagePickerModal({
           style={{
             display: "flex",
             gap: 0,
-            borderBottom: "1px solid var(--border)",
-            padding: "0 20px",
+            borderBottom: `1px solid ${COLORS.border}`,
+            padding: `0 ${SP.huge}px`,
           }}
         >
           {(["current", "tmdb", "local"] as const).map((t) => (
@@ -237,11 +233,11 @@ export function ImagePickerModal({
               style={{
                 background: "none",
                 border: "none",
-                borderBottom: tab === t ? "2px solid var(--color-primary)" : "2px solid transparent",
-                padding: "10px 14px",
-                fontSize: 13,
-                fontWeight: tab === t ? 600 : 400,
-                color: tab === t ? "var(--color-primary)" : "var(--text-muted)",
+                borderBottom: tab === t ? `2px solid ${COLORS.primary}` : "2px solid transparent",
+                padding: `${SP.lg}px ${SP.xxl}px`,
+                fontSize: FONT.md,
+                fontWeight: tab === t ? WEIGHT.semi : WEIGHT.normal,
+                color: tab === t ? COLORS.primary : COLORS.textMuted,
                 cursor: "pointer",
                 marginBottom: -1,
               }}
@@ -252,7 +248,7 @@ export function ImagePickerModal({
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+        <div style={{ flex: 1, overflow: "auto", padding: SP.huge }}>
           {tab === "current" && (
             <CurrentTab
               title={title}
@@ -312,19 +308,17 @@ function CurrentTab({
   const isPortrait = imageType === "poster" || imageType === "photo";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+    <div style={{ ...flex.colGap(SP.huge), alignItems: "center" }}>
       {/* Current image preview */}
       <div
         style={{
           width: isPortrait ? 180 : 320,
           height: isPortrait ? 270 : 180,
-          borderRadius: 8,
+          borderRadius: RADIUS.lg,
           overflow: "hidden",
           background: "var(--bg-main)",
-          border: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          border: `1px solid ${COLORS.border}`,
+          ...flex.center,
           flexShrink: 0,
         }}
       >
@@ -335,14 +329,14 @@ function CurrentTab({
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         ) : (
-          <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: 16 }}>
+          <div style={{ fontSize: FONT.md, color: COLORS.textMuted, textAlign: "center", padding: SP.xxxl }}>
             Aucune image<br />enregistrée
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+      <div style={{ ...flex.rowGap(SP.lg), flexWrap: "wrap", justifyContent: "center" }}>
         {onGoTmdb && (
           <button onClick={onGoTmdb} style={btnStyle("primary")}>
             Choisir sur TMDB
@@ -382,7 +376,7 @@ function TmdbTab({
 }) {
   if (!hasTmdbId) {
     return (
-      <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 40 }}>
+      <div style={{ textAlign: "center", color: COLORS.textMuted, padding: 40 }}>
         Cette entité n'a pas d'identifiant TMDB — impossible de charger des images TMDB.
       </div>
     );
@@ -390,7 +384,7 @@ function TmdbTab({
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 40 }}>
+      <div style={{ textAlign: "center", color: COLORS.textMuted, padding: 40 }}>
         Chargement des images TMDB…
       </div>
     );
@@ -398,7 +392,7 @@ function TmdbTab({
 
   if (error) {
     return (
-      <div style={{ color: "var(--error)", padding: 16, background: "#fee2e2", borderRadius: 8 }}>
+      <div style={{ color: COLORS.error, padding: SP.xxxl, background: "#fee2e2", borderRadius: RADIUS.lg }}>
         {error}
       </div>
     );
@@ -406,7 +400,7 @@ function TmdbTab({
 
   if (candidates.length === 0) {
     return (
-      <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 40 }}>
+      <div style={{ textAlign: "center", color: COLORS.textMuted, padding: 40 }}>
         Aucune image disponible sur TMDB.
       </div>
     );
@@ -417,7 +411,7 @@ function TmdbTab({
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-        gap: 12,
+        gap: SP.xl,
       }}
     >
       {candidates.map((c) => {
@@ -427,11 +421,11 @@ function TmdbTab({
             key={c.tmdb_path}
             style={{
               position: "relative",
-              borderRadius: 8,
+              borderRadius: RADIUS.lg,
               overflow: "hidden",
-              border: "2px solid var(--border)",
+              border: `2px solid ${COLORS.border}`,
               cursor: isApplying ? "wait" : "pointer",
-              transition: "border-color 0.15s, transform 0.1s",
+              transition: `border-color ${TRANSITION.fast}, transform 0.1s`,
             }}
             onClick={() => !applying && onApply(c)}
             onMouseEnter={(e) => {
@@ -455,14 +449,14 @@ function TmdbTab({
               <div
                 style={{
                   position: "absolute",
-                  top: 4,
-                  right: 4,
+                  top: SP.s,
+                  right: SP.s,
                   background: "rgba(0,0,0,0.65)",
                   color: "#fff",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  borderRadius: 4,
-                  padding: "2px 5px",
+                  fontSize: FONT.xs,
+                  fontWeight: WEIGHT.semi,
+                  borderRadius: RADIUS.sm,
+                  padding: `${SP.xs}px 5px`,
                 }}
               >
                 ★ {c.vote_average.toFixed(1)}
@@ -473,12 +467,10 @@ function TmdbTab({
                 style={{
                   position: "absolute",
                   inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  ...flex.center,
                   background: "rgba(0,0,0,0.3)",
                   color: "#fff",
-                  fontSize: 12,
+                  fontSize: FONT.base,
                 }}
               >
                 …
@@ -513,7 +505,7 @@ function LocalTab({
   onBrowse: () => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+    <div style={{ ...flex.colGap(SP.huge), alignItems: "center" }}>
       {/* Drop zone */}
       <div
         onDragOver={onDragOver}
@@ -522,19 +514,19 @@ function LocalTab({
         style={{
           width: "100%",
           maxWidth: 440,
-          border: `2px dashed ${dragOver ? "var(--color-primary)" : "var(--border)"}`,
-          borderRadius: 12,
-          padding: "48px 24px",
+          border: `2px dashed ${dragOver ? COLORS.primary : COLORS.border}`,
+          borderRadius: RADIUS.xl,
+          padding: `48px ${SP.mega}px`,
           textAlign: "center",
-          background: dragOver ? "var(--color-primary-soft)" : "var(--bg-main)",
-          transition: "border-color 0.15s, background 0.15s",
+          background: dragOver ? COLORS.primarySoft : "var(--bg-main)",
+          transition: `border-color ${TRANSITION.fast}, background ${TRANSITION.fast}`,
         }}
       >
-        <div style={{ fontSize: 32, marginBottom: 10 }}>🖼</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)", marginBottom: 6 }}>
+        <div style={{ fontSize: 32, marginBottom: SP.lg }}>🖼</div>
+        <div style={{ fontSize: FONT.lg, fontWeight: WEIGHT.semi, color: COLORS.textMain, marginBottom: SP.m }}>
           {applying ? "Importation…" : "Déposez une image ici"}
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
+        <div style={{ fontSize: FONT.base, color: COLORS.textMuted, marginBottom: SP.xxxl }}>
           JPG, PNG, WEBP acceptés
         </div>
         {!applying && (
@@ -547,11 +539,11 @@ function LocalTab({
       {error && (
         <div
           style={{
-            color: "var(--error)",
+            color: COLORS.error,
             background: "#fee2e2",
-            borderRadius: 8,
-            padding: "10px 14px",
-            fontSize: 13,
+            borderRadius: RADIUS.lg,
+            padding: `${SP.lg}px ${SP.xxl}px`,
+            fontSize: FONT.md,
             maxWidth: 440,
             width: "100%",
           }}
@@ -570,18 +562,18 @@ function LocalTab({
 function btnStyle(variant: "primary" | "secondary" | "danger"): React.CSSProperties {
   const base: React.CSSProperties = {
     border: "none",
-    borderRadius: 6,
-    padding: "7px 14px",
-    fontSize: 13,
-    fontWeight: 500,
+    borderRadius: RADIUS.md,
+    padding: `7px ${SP.xxl}px`,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.medium,
     cursor: "pointer",
   };
-  if (variant === "primary") return { ...base, background: "var(--color-primary)", color: "#fff" };
-  if (variant === "danger") return { ...base, background: "var(--error)", color: "#fff" };
+  if (variant === "primary") return { ...base, background: COLORS.primary, color: "#fff" };
+  if (variant === "danger") return { ...base, background: COLORS.error, color: "#fff" };
   return {
     ...base,
-    background: "var(--bg-surface-alt)",
-    color: "var(--text-main)",
-    border: "1px solid var(--border)",
+    background: COLORS.bgSurfaceAlt,
+    color: COLORS.textMain,
+    border: `1px solid ${COLORS.border}`,
   };
 }

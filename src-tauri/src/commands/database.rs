@@ -70,7 +70,7 @@ pub async fn open_database(
     let db_path = PathBuf::from(&path);
 
     if !db_path.exists() {
-        return Err(format!("Database file not found: {}", path));
+        return Err(format!("Fichier de base de données introuvable : {}", path));
     }
 
     // Clone current DB handle for closing (release lock immediately)

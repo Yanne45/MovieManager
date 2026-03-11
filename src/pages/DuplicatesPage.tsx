@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TabBar, EmptyState, LoadingSpinner } from "../components/ui";
 import { useExactDuplicates, useProbableDuplicates, useMultiVersionMovies } from "../lib/hooks";
 import type { DuplicateGroup } from "../lib/api";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex } from "../lib/tokens";
 
 // ============================================================================
 // Duplicates Page
@@ -28,10 +29,10 @@ export function DuplicatesPage() {
     multiVersion;
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ flex: 1, ...flex.col, overflow: "hidden" }}>
       <TabBar tabs={tabs} active={tab} onChange={setTab} />
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: `${SP.xxxl}px ${SP.huge}px` }}>
         {isLoading && <LoadingSpinner message="Analyse des doublons…" />}
 
         {!isLoading && (!displayed || displayed.length === 0) && (
@@ -72,7 +73,7 @@ function TabDescription({ tab, count }: { tab: string; count: number }) {
       : `${count} film(s) possédant plusieurs versions (1080p, 4K, Director's Cut…). C'est normal dans une collection multi-versions.`;
 
   return (
-    <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.5 }}>
+    <p style={{ fontSize: FONT.base, color: COLORS.textMuted, marginBottom: SP.xxxl, lineHeight: 1.5 }}>
       {desc}
     </p>
   );
@@ -83,16 +84,16 @@ function DuplicateCard({ group }: { group: DuplicateGroup }) {
   const isProbable = group.match_type === "probable";
 
   const borderColor = isExact
-    ? "var(--error)"
+    ? COLORS.error
     : isProbable
-    ? "var(--warning)"
-    : "var(--color-primary)";
+    ? COLORS.warning
+    : COLORS.primary;
 
   const badgeStyle = {
     exact: { bg: "var(--score-d-bg)", text: "var(--score-d-text)", label: "Exact" },
     probable: { bg: "var(--score-c-bg)", text: "var(--score-c-text)", label: "Probable" },
     multi_version: { bg: "var(--score-b-bg)", text: "var(--score-b-text)", label: "Multi-version" },
-  }[group.match_type] ?? { bg: "var(--bg-surface-alt)", text: "var(--text-muted)", label: group.match_type };
+  }[group.match_type] ?? { bg: COLORS.bgSurfaceAlt, text: COLORS.textMuted, label: group.match_type };
 
   const sizeStr = group.total_size > 0
     ? group.total_size > 1024 * 1024 * 1024
@@ -106,46 +107,46 @@ function DuplicateCard({ group }: { group: DuplicateGroup }) {
   return (
     <div
       style={{
-        padding: "12px 14px",
-        marginBottom: 8,
-        borderRadius: 8,
-        border: `1px solid var(--border)`,
+        padding: `${SP.xl}px ${SP.xxl}px`,
+        marginBottom: SP.base,
+        borderRadius: RADIUS.lg,
+        border: `1px solid ${COLORS.border}`,
         borderLeft: `3px solid ${borderColor}`,
-        background: "var(--bg-surface)",
+        background: COLORS.bgSurface,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+      <div style={{ ...flex.rowGap(SP.lg), marginBottom: SP.m }}>
         <span
           style={{
-            padding: "2px 8px",
-            borderRadius: 4,
-            fontSize: 10,
-            fontWeight: 600,
+            padding: `${SP.xs}px ${SP.base}px`,
+            borderRadius: RADIUS.sm,
+            fontSize: FONT.xs,
+            fontWeight: WEIGHT.semi,
             background: badgeStyle.bg,
             color: badgeStyle.text,
           }}
         >
           {badgeStyle.label}
         </span>
-        <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>
+        <span style={{ fontSize: FONT.md, fontWeight: WEIGHT.semi, flex: 1 }}>
           {group.match_key}
         </span>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
           {group.file_count} élément{group.file_count > 1 ? "s" : ""}
           {sizeStr && ` · ${sizeStr}`}
         </span>
       </div>
 
       {/* File list */}
-      <div style={{ paddingLeft: 8 }}>
+      <div style={{ paddingLeft: SP.base }}>
         {names.map((name, i) => (
           <div
             key={i}
             style={{
-              fontSize: 11,
-              color: "var(--text-secondary)",
-              padding: "3px 0",
-              borderBottom: i < names.length - 1 ? "1px solid var(--border)" : "none",
+              fontSize: FONT.sm,
+              color: COLORS.textSecondary,
+              padding: `${RADIUS.sm}px 0`,
+              borderBottom: i < names.length - 1 ? `1px solid ${COLORS.border}` : "none",
               fontFamily: isExact ? "monospace" : "inherit",
             }}
           >
@@ -156,7 +157,7 @@ function DuplicateCard({ group }: { group: DuplicateGroup }) {
 
       {/* Hash preview for exact duplicates */}
       {isExact && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, fontFamily: "monospace" }}>
+        <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginTop: SP.m, fontFamily: "monospace" }}>
           SHA256: {group.match_key.slice(0, 16)}…
         </div>
       )}

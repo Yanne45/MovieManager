@@ -408,6 +408,15 @@ export interface ChangeLogEntry {
   new_value: string | null;
   source: string;
   timestamp: string;
+  operation_id: string | null;
+}
+
+export interface OperationSummary {
+  operation_id: string;
+  source: string;
+  timestamp: string;
+  change_count: number;
+  entity_count: number;
 }
 
 export const getEntityHistory = (entityType: string, entityId: number) =>
@@ -416,6 +425,12 @@ export const getRecentChanges = (limit?: number) =>
   invoke<ChangeLogEntry[]>("get_recent_changes", { limit });
 export const rollbackChange = (changeId: number) =>
   invoke<ChangeLogEntry | null>("rollback_change", { changeId });
+export const getOperations = (limit?: number) =>
+  invoke<OperationSummary[]>("get_operations", { limit });
+export const getOperationChanges = (operationId: string) =>
+  invoke<ChangeLogEntry[]>("get_operation_changes", { operationId });
+export const rollbackOperation = (operationId: string) =>
+  invoke<number>("rollback_operation", { operationId });
 
 // ============================================================================
 // Inbox
@@ -450,6 +465,30 @@ export const reopenInboxItem = (inboxId: number) =>
   invoke<void>("reopen_inbox_item", { inboxId });
 export const deleteInboxItem = (inboxId: number) =>
   invoke<boolean>("delete_inbox_item", { inboxId });
+
+// Batch operations
+export interface BatchPreviewItem {
+  id: number;
+  parsed_title: string | null;
+  category: string;
+  status: string;
+}
+
+export interface BatchPreview {
+  total: number;
+  by_status: Record<string, number>;
+  by_category: Record<string, number>;
+  items: BatchPreviewItem[];
+}
+
+export const batchPreviewInbox = (ids: number[]) =>
+  invoke<BatchPreview>("batch_preview_inbox", { ids });
+export const batchIgnoreInbox = (ids: number[]) =>
+  invoke<number>("batch_ignore_inbox", { ids });
+export const batchReopenInbox = (ids: number[]) =>
+  invoke<number>("batch_reopen_inbox", { ids });
+export const batchDeleteInbox = (ids: number[]) =>
+  invoke<number>("batch_delete_inbox", { ids });
 
 // ============================================================================
 // Images
@@ -639,6 +678,8 @@ export interface CollectionWithCount {
   name: string;
   description: string | null;
   poster_path: string | null;
+  is_smart: boolean;
+  smart_rules: string | null;
   item_count: number;
   created_at: string;
   updated_at: string;
@@ -667,6 +708,34 @@ export const addCollectionItem = (collectionId: number, movieId?: number, series
 export const removeCollectionItem = (itemId: number) => invoke<boolean>("remove_collection_item", { itemId });
 export const reorderCollectionItem = (itemId: number, newPosition: number) =>
   invoke<void>("reorder_collection_item", { itemId, newPosition });
+
+// Smart collections
+export interface SmartRuleSet {
+  match: "all" | "any";
+  rules: SmartRule[];
+  entity_type?: "movie" | "series" | null;
+}
+
+export interface SmartRule {
+  field: string;
+  op: string;
+  value: string | number | boolean;
+}
+
+export interface SmartCollectionResult {
+  id: number;
+  title: string;
+  year: number | null;
+  poster_path: string | null;
+  entity_type: "movie" | "series";
+}
+
+export const createSmartCollection = (name: string, description: string | undefined, smartRules: string) =>
+  invoke<CollectionWithCount>("create_smart_collection", { name, description, smartRules });
+export const updateSmartRules = (id: number, smartRules: string) =>
+  invoke<CollectionWithCount | null>("update_smart_rules", { id, smartRules });
+export const getSmartCollectionItems = (collectionId: number) =>
+  invoke<SmartCollectionResult[]>("get_smart_collection_items", { collectionId });
 
 // ============================================================================
 // Episodes (update)
@@ -963,6 +1032,28 @@ export const previewScanPaths = (paths: string[]) =>
 
 export const importFiles = (files: ImportFileInput[]) =>
   invoke<ImportFileResult[]>("import_files", { files });
+
+// Dry-run (impact preview)
+export interface DryRunResult {
+  file_path: string;
+  title: string;
+  action: "create" | "update" | "inbox" | "skip";
+  detail: string;
+  entity_type: string | null;
+  existing_title: string | null;
+}
+
+export interface DryRunSummary {
+  total: number;
+  create: number;
+  update: number;
+  inbox: number;
+  skip: number;
+  items: DryRunResult[];
+}
+
+export const dryRunImport = (files: ImportFileInput[]) =>
+  invoke<DryRunSummary>("dry_run_import", { files });
 
 // ============================================================================
 // Score weights / settings

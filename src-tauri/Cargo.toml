@@ -61,6 +61,9 @@ zip = "2"
 # XML parsing (NFO import)
 quick-xml = { version = "0.36", features = ["serialize"] }
 
+# UUID (operation tracking)
+uuid = { version = "1", features = ["v4"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

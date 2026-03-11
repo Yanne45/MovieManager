@@ -1,6 +1,7 @@
 import { SectionTitle, ScoreBadge, LoadingSpinner } from "../components/ui";
 import { useDashboardStats, useGenreStats, useRecentAdditions } from "../lib/hooks";
 import { useMovies, useSeriesList } from "../lib/hooks";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, TRANSITION, flex, card } from "../lib/tokens";
 
 // ============================================================================
 // Stats Page (self-loading)
@@ -15,7 +16,7 @@ export function StatsPage() {
 
   if (isLoading || !dbStats) {
     return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ ...flex.center, flex: 1 }}>
         <LoadingSpinner message="Chargement des statistiques…" />
       </div>
     );
@@ -40,14 +41,14 @@ export function StatsPage() {
   const totalSizeGb = dbStats.total_size_bytes / (1024 * 1024 * 1024);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+    <div style={{ flex: 1, overflowY: "auto", padding: SP.huge }}>
       {/* KPI cards */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-          gap: 12,
-          marginBottom: 24,
+          gap: SP.xl,
+          marginBottom: SP.mega,
         }}
       >
         <KpiCard label="Films" value={dbStats.total_movies} />
@@ -61,35 +62,35 @@ export function StatsPage() {
         <KpiCard
           label="Inbox"
           value={dbStats.inbox_pending}
-          accent={dbStats.inbox_pending > 0 ? "var(--warning)" : undefined}
+          accent={dbStats.inbox_pending > 0 ? COLORS.warning : undefined}
         />
       </div>
 
       {/* Two-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.xxxl }}>
         {/* Score distribution */}
-        <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+        <div style={{ ...card.base, padding: SP.xxxl }}>
           <SectionTitle>Répartition par score qualité</SectionTitle>
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: SP.xl }}>
             {(["A", "B", "C", "D"] as const).map((grade) => {
               const count = scoreDistribution[grade] || 0;
               const total = scoreDistribution.A + scoreDistribution.B + scoreDistribution.C + scoreDistribution.D;
               const pct = total > 0 ? (count / total) * 100 : 0;
               return (
-                <div key={grade} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <div key={grade} style={{ ...flex.rowGap(SP.lg), marginBottom: SP.lg }}>
                   <ScoreBadge score={grade} />
-                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: "var(--bg-surface-alt)", overflow: "hidden" }}>
+                  <div style={{ flex: 1, height: SP.base, borderRadius: RADIUS.sm, background: COLORS.bgSurfaceAlt, overflow: "hidden" }}>
                     <div
                       style={{
                         width: `${pct}%`,
                         height: "100%",
-                        borderRadius: 4,
-                        background: "var(--color-primary)",
-                        transition: "width 0.3s",
+                        borderRadius: RADIUS.sm,
+                        background: COLORS.primary,
+                        transition: `width ${TRANSITION.slow}`,
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: 12, color: "var(--text-muted)", minWidth: 50, textAlign: "right" }}>
+                  <span style={{ fontSize: FONT.base, color: COLORS.textMuted, minWidth: 50, textAlign: "right" }}>
                     {count} ({pct.toFixed(0)}%)
                   </span>
                 </div>
@@ -99,21 +100,21 @@ export function StatsPage() {
         </div>
 
         {/* Series completeness */}
-        <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+        <div style={{ ...card.base, padding: SP.xxxl }}>
           <SectionTitle>Complétude des séries</SectionTitle>
-          <div style={{ marginTop: 12, display: "flex", gap: 16 }}>
+          <div style={{ marginTop: SP.xl, ...flex.center, gap: SP.xxxl }}>
             <CompletePie complete={seriesComplete} incomplete={seriesIncomplete} total={sl.length} />
-            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ color: "var(--success)", fontWeight: 600, marginRight: 6 }}>●</span>
+            <div style={{ fontSize: FONT.base, color: COLORS.textSecondary }}>
+              <div style={{ marginBottom: SP.base }}>
+                <span style={{ color: COLORS.success, fontWeight: WEIGHT.semi, marginRight: SP.m }}>●</span>
                 {seriesComplete} série{seriesComplete !== 1 ? "s" : ""} complète{seriesComplete !== 1 ? "s" : ""}
               </div>
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ color: "var(--warning)", fontWeight: 600, marginRight: 6 }}>●</span>
+              <div style={{ marginBottom: SP.base }}>
+                <span style={{ color: COLORS.warning, fontWeight: WEIGHT.semi, marginRight: SP.m }}>●</span>
                 {seriesIncomplete} série{seriesIncomplete !== 1 ? "s" : ""} incomplète{seriesIncomplete !== 1 ? "s" : ""}
               </div>
               <div>
-                <span style={{ color: "var(--text-muted)", fontWeight: 600, marginRight: 6 }}>●</span>
+                <span style={{ color: COLORS.textMuted, fontWeight: WEIGHT.semi, marginRight: SP.m }}>●</span>
                 {seriesEmpty} série{seriesEmpty !== 1 ? "s" : ""} vide{seriesEmpty !== 1 ? "s" : ""}
               </div>
             </div>
@@ -122,30 +123,30 @@ export function StatsPage() {
       </div>
 
       {/* Genre distribution + Recent additions — side by side */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.xxxl, marginTop: SP.xxxl }}>
         {/* Genre distribution */}
         {genreStats && genreStats.length > 0 && (
-          <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+          <div style={{ ...card.base, padding: SP.xxxl }}>
             <SectionTitle>Top genres</SectionTitle>
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: SP.xl }}>
               {genreStats.map(([name, count]) => {
                 const maxCount = genreStats[0]?.[1] ?? 1;
                 const pct = (count / maxCount) * 100;
                 return (
-                  <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, minWidth: 100 }}>{name}</span>
-                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--bg-surface-alt)", overflow: "hidden" }}>
+                  <div key={name} style={{ ...flex.rowGap(SP.lg), marginBottom: SP.base }}>
+                    <span style={{ fontSize: FONT.base, fontWeight: WEIGHT.medium, minWidth: 100 }}>{name}</span>
+                    <div style={{ flex: 1, height: SP.m, borderRadius: RADIUS.sm, background: COLORS.bgSurfaceAlt, overflow: "hidden" }}>
                       <div
                         style={{
                           width: `${pct}%`,
                           height: "100%",
-                          borderRadius: 3,
-                          background: "var(--color-primary-soft)",
-                          transition: "width 0.3s",
+                          borderRadius: RADIUS.sm,
+                          background: COLORS.primarySoft,
+                          transition: `width ${TRANSITION.slow}`,
                         }}
                       />
                     </div>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)", minWidth: 30, textAlign: "right" }}>
+                    <span style={{ fontSize: FONT.sm, color: COLORS.textMuted, minWidth: 30, textAlign: "right" }}>
                       {count}
                     </span>
                   </div>
@@ -156,38 +157,37 @@ export function StatsPage() {
         )}
 
         {/* Recent additions */}
-        <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+        <div style={{ ...card.base, padding: SP.xxxl }}>
           <SectionTitle>Ajouts récents</SectionTitle>
           {(!recentAdditions || recentAdditions.length === 0) ? (
-            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>Aucun ajout récent</p>
+            <p style={{ fontSize: FONT.base, color: COLORS.textMuted, marginTop: SP.base }}>Aucun ajout récent</p>
           ) : (
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: SP.base }}>
               {recentAdditions.map((item, i) => (
                 <div
                   key={i}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "8px 0",
-                    borderBottom: i < recentAdditions.length - 1 ? "1px solid var(--border)" : "none",
-                    fontSize: 13,
+                    ...flex.row,
+                    padding: `${SP.base}px 0`,
+                    borderBottom: i < recentAdditions.length - 1 ? `1px solid ${COLORS.border}` : "none",
+                    fontSize: FONT.md,
                   }}
                 >
                   <span
                     style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      padding: "1px 6px",
-                      borderRadius: 3,
-                      background: item.entity_type === "movie" ? "var(--color-primary-soft)" : "var(--bg-surface-alt)",
-                      color: item.entity_type === "movie" ? "var(--color-primary)" : "var(--text-muted)",
-                      marginRight: 10,
+                      fontSize: FONT.xs,
+                      fontWeight: WEIGHT.semi,
+                      padding: `1px ${SP.m}px`,
+                      borderRadius: RADIUS.sm,
+                      background: item.entity_type === "movie" ? COLORS.primarySoft : COLORS.bgSurfaceAlt,
+                      color: item.entity_type === "movie" ? COLORS.primary : COLORS.textMuted,
+                      marginRight: SP.lg,
                     }}
                   >
                     {item.entity_type === "movie" ? "Film" : "Série"}
                   </span>
-                  <span style={{ flex: 1, fontWeight: 500 }}>{item.title}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{item.created_at?.slice(0, 10)}</span>
+                  <span style={{ flex: 1, fontWeight: WEIGHT.medium }}>{item.title}</span>
+                  <span style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>{item.created_at?.slice(0, 10)}</span>
                 </div>
               ))}
             </div>
@@ -202,9 +202,9 @@ export function StatsPage() {
 
 function KpiCard({ label, value, accent }: { label: string; value: number | string; accent?: string }) {
   return (
-    <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
-      <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 600, color: accent || "var(--text-main)" }}>{value}</div>
+    <div style={{ ...card.base, padding: SP.xxxl, textAlign: "center" }}>
+      <div style={{ fontSize: FONT.sm, fontWeight: WEIGHT.medium, color: COLORS.textMuted, marginBottom: SP.m }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: WEIGHT.semi, color: accent || COLORS.textMain }}>{value}</div>
     </div>
   );
 }

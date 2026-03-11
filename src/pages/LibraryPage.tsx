@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { ScoreBadge, SectionTitle } from "../components/ui";
+import { ScoreBadge, SectionTitle, usePagination, PaginationBar } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
 import type { Movie } from "../lib/api";
 import { tmdbImageUrl } from "../lib/api";
@@ -11,6 +11,10 @@ import type { ActiveFilters } from "../components/FilterBar";
 import type { ImageRecord } from "../lib/api";
 import { LightboxModal } from "../components/LightboxModal";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import {
+  COLORS, SP, FONT, WEIGHT, RADIUS, SIZES, TRANSITION,
+  flex, th, cell, panel,
+} from "../lib/tokens";
 
 interface CollectionRef { id: number; name: string; }
 
@@ -164,6 +168,16 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
     return result;
   }, [movies, searchQuery, filters, sortKey, sortDir, fileSizeMap]);
 
+  const pagination = usePagination(filtered, 50);
+
+  // Reset to page 1 when filters/search change
+  const filterKey = `${searchQuery}|${JSON.stringify(filters)}`;
+  const prevFilterKey = useRef(filterKey);
+  if (filterKey !== prevFilterKey.current) {
+    prevFilterKey.current = filterKey;
+    pagination.setPage(1);
+  }
+
   // The movie currently selected in the table (for keyboard nav + edit shortcut)
   const selected = filtered.find((m) => m.id === selectedId) || null;
 
@@ -182,20 +196,21 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
   const canGoBack = panelStack.length > 0;
   const panelOpen = panelView !== null && (panelMovie !== null || panelView.type === "person");
 
-  // Keyboard navigation
-  const selectedIndex = filtered.findIndex((m) => m.id === selectedId);
+  // Keyboard navigation (within current page)
+  const visibleItems = pagination.pageItems;
+  const selectedIndex = visibleItems.findIndex((m) => m.id === selectedId);
 
   useKeyboardShortcuts({
     onArrowUp: useCallback(() => {
-      if (filtered.length === 0) return;
+      if (visibleItems.length === 0) return;
       const idx = selectedIndex > 0 ? selectedIndex - 1 : 0;
-      selectMovie(filtered[idx].id);
-    }, [filtered, selectedIndex, selectMovie]),
+      selectMovie(visibleItems[idx].id);
+    }, [visibleItems, selectedIndex, selectMovie]),
     onArrowDown: useCallback(() => {
-      if (filtered.length === 0) return;
-      const idx = selectedIndex < filtered.length - 1 ? selectedIndex + 1 : selectedIndex;
-      selectMovie(filtered[idx].id);
-    }, [filtered, selectedIndex, selectMovie]),
+      if (visibleItems.length === 0) return;
+      const idx = selectedIndex < visibleItems.length - 1 ? selectedIndex + 1 : selectedIndex;
+      selectMovie(visibleItems[idx].id);
+    }, [visibleItems, selectedIndex, selectMovie]),
     onEdit: useCallback(() => {
       if (selected && onEditMovie) onEditMovie(selected);
     }, [selected, onEditMovie]),
@@ -212,14 +227,24 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
 
   if (viewMode === "gallery") {
     return (
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        <GalleryView
-          movies={filtered}
-          onSelect={selectMovie}
-          onContextMenu={handleContextMenu}
-          multiSelect={multiSelect}
-          onMultiToggle={handleMultiToggle}
-          onDoubleClick={onEditMovie}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", ...flex.col }}>
+        <div style={{ flex: 1, overflow: "auto" }}>
+          <GalleryView
+            movies={pagination.pageItems}
+            onSelect={selectMovie}
+            onContextMenu={handleContextMenu}
+            multiSelect={multiSelect}
+            onMultiToggle={handleMultiToggle}
+            onDoubleClick={onEditMovie}
+          />
+        </div>
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          pageSize={pagination.pageSize}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
         />
         {multiSelect.size > 0 && (
           <SelectionBar
@@ -246,35 +271,40 @@ export function LibraryPage({ movies, viewMode, compact = false, searchQuery, fi
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative", height: 0, minHeight: "100%" }}>
-      {/* Table */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <MovieTable
-          movies={filtered}
-          selectedId={selectedId}
-          onSelect={selectMovie}
-          compact={compact}
-          onContextMenu={handleContextMenu}
-          multiSelect={multiSelect}
-          onMultiToggle={handleMultiToggle}
-          onDoubleClick={onEditMovie}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={toggleSort}
-          fileSizeMap={fileSizeMap}
-          fileLocationMap={fileLocationMap}
+      {/* Table + pagination */}
+      <div style={{ flex: 1, ...flex.col, overflow: "hidden" }}>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <MovieTable
+            movies={pagination.pageItems}
+            selectedId={selectedId}
+            onSelect={selectMovie}
+            compact={compact}
+            onContextMenu={handleContextMenu}
+            multiSelect={multiSelect}
+            onMultiToggle={handleMultiToggle}
+            onDoubleClick={onEditMovie}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={toggleSort}
+            fileSizeMap={fileSizeMap}
+            fileLocationMap={fileLocationMap}
+          />
+        </div>
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          pageSize={pagination.pageSize}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
         />
       </div>
 
       {/* Sliding detail panel */}
       <div
         style={{
-          width: 340,
-          flexShrink: 0,
-          borderLeft: "1px solid var(--border)",
-          background: "var(--bg-surface)",
-          overflowY: "auto",
-          transition: "margin-right 0.25s ease, opacity 0.2s ease",
-          marginRight: panelOpen ? 0 : -340,
+          ...panel.container,
+          marginRight: panelOpen ? 0 : -SIZES.detailPanelWidth,
           opacity: panelOpen ? 1 : 0,
         }}
       >
@@ -387,11 +417,11 @@ function MovieTable({
       ];
 
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: FONT.md }}>
       <thead>
         <tr
           style={{
-            background: "var(--bg-surface-alt)",
+            background: COLORS.bgSurfaceAlt,
             position: "sticky",
             top: 0,
             zIndex: 1,
@@ -402,20 +432,14 @@ function MovieTable({
               key={i}
               onClick={() => col.key && onSort(col.key)}
               style={{
-                padding: "8px 10px",
-                textAlign: "left",
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                fontSize: 12,
-                borderBottom: "1px solid var(--border)",
-                whiteSpace: "nowrap",
+                ...th.base,
                 cursor: col.key ? "pointer" : "default",
                 userSelect: "none",
               }}
             >
               {col.label}
               {col.key && col.key === sortKey && (
-                <span style={{ marginLeft: 4, fontSize: 10 }}>
+                <span style={{ marginLeft: SP.s, fontSize: FONT.xs }}>
                   {sortDir === "asc" ? "▲" : "▼"}
                 </span>
               )}
@@ -440,12 +464,12 @@ function MovieTable({
                 background: multiSelect.has(m.id)
                   ? "var(--row-multiselect-bg)"
                   : isSelected
-                    ? "var(--color-primary-soft)"
+                    ? COLORS.primarySoft
                     : i % 2 === 0
-                      ? "var(--bg-surface)"
+                      ? COLORS.bgSurface
                       : "var(--row-odd-bg)",
-                transition: "background 0.1s",
-                outline: multiSelect.has(m.id) ? "2px solid var(--warning)" : undefined,
+                transition: `background ${TRANSITION.fast}`,
+                outline: multiSelect.has(m.id) ? `2px solid ${COLORS.warning}` : undefined,
                 outlineOffset: -2,
               }}
               onMouseEnter={(e) => {
@@ -454,11 +478,11 @@ function MovieTable({
               onMouseLeave={(e) => {
                 if (!isSelected)
                   e.currentTarget.style.background =
-                    i % 2 === 0 ? "var(--bg-surface)" : "var(--row-odd-bg)";
+                    i % 2 === 0 ? COLORS.bgSurface : "var(--row-odd-bg)";
               }}
             >
               {!compact && (
-                <td style={{ padding: "6px 10px", width: 42 }}>
+                <td style={{ ...(compact ? cell.compact : cell.base), width: 42 }}>
                   <SmartPoster
                     entityType="movie"
                     entityId={m.id}
@@ -470,26 +494,26 @@ function MovieTable({
               )}
               <td
                 style={{
-                  padding: compact ? "4px 10px" : "6px 10px",
+                  ...(compact ? cell.compact : cell.base),
                   maxWidth: 260,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                 }}
               >
-                <div style={{ fontWeight: 500 }}>{m.title}</div>
+                <div style={{ fontWeight: WEIGHT.medium }}>{m.title}</div>
                 <MovieDirectorsLine movieId={m.id} />
               </td>
-              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)" }}>
+              <td style={{ ...(compact ? cell.compact : cell.base), color: COLORS.textMuted }}>
                 {m.year || "—"}
               </td>
-              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)" }}>
+              <td style={{ ...(compact ? cell.compact : cell.base), color: COLORS.textMuted }}>
                 {m.runtime ? `${m.runtime} min` : "—"}
               </td>
-              <td style={{ padding: compact ? "4px 10px" : "6px 10px" }}>
+              <td style={{ ...(compact ? cell.compact : cell.base) }}>
                 <ScoreBadge score={m.primary_quality_score} />
               </td>
-              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-secondary)", fontSize: 12 }}>
+              <td style={{ ...(compact ? cell.compact : cell.base), color: COLORS.textSecondary, fontSize: FONT.base }}>
                 {m.primary_quality_score === "A"
                   ? "4K HDR"
                   : m.primary_quality_score === "B"
@@ -498,10 +522,10 @@ function MovieTable({
                       ? "720p"
                       : "SD"}
               </td>
-              <td style={{ padding: compact ? "4px 10px" : "6px 10px", color: "var(--text-muted)", fontSize: 12 }}>
+              <td style={{ ...(compact ? cell.compact : cell.base), color: COLORS.textMuted, fontSize: FONT.base }}>
                 {formatFileSize(fileSizeMap?.get(m.id) ?? 0)}
               </td>
-              <td style={{ padding: compact ? "4px 10px" : "6px 10px", maxWidth: 180, overflow: "hidden" }}>
+              <td style={{ ...(compact ? cell.compact : cell.base), maxWidth: 180, overflow: "hidden" }}>
                 <LocationBadge loc={fileLocationMap?.get(m.id)} />
               </td>
             </tr>
@@ -514,14 +538,14 @@ function MovieTable({
 
 /** Compact location badge: volume label + filename */
 function LocationBadge({ loc }: { loc: import("../lib/api").MovieFileLocation | undefined }) {
-  if (!loc) return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>—</span>;
+  if (!loc) return <span style={{ color: COLORS.textMuted, fontSize: FONT.sm }}>—</span>;
   const label = loc.volume_label || loc.library_name;
   return (
     <div title={loc.file_path} style={{ cursor: "default" }}>
       <div style={{
-        fontSize: 10,
-        fontWeight: 600,
-        color: "var(--color-primary)",
+        fontSize: FONT.xs,
+        fontWeight: WEIGHT.semi,
+        color: COLORS.primary,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
@@ -529,8 +553,8 @@ function LocationBadge({ loc }: { loc: import("../lib/api").MovieFileLocation | 
         {label}
       </div>
       <div style={{
-        fontSize: 9,
-        color: "var(--text-muted)",
+        fontSize: FONT.tiny,
+        color: COLORS.textMuted,
         fontFamily: "monospace",
         overflow: "hidden",
         textOverflow: "ellipsis",
@@ -550,9 +574,9 @@ function MovieDirectorsLine({ movieId }: { movieId: number }) {
   return (
     <div
       style={{
-        fontSize: 9,
+        fontSize: FONT.tiny,
         fontStyle: "italic",
-        color: "var(--text-muted)",
+        color: COLORS.textMuted,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
@@ -586,13 +610,13 @@ function PersonMiniPanel({
 
   const navBtnStyle: React.CSSProperties = {
     background: "none", border: "none", cursor: "pointer",
-    fontSize: 16, color: "var(--text-muted)", padding: "2px 6px",
+    fontSize: FONT.xl, color: COLORS.textMuted, padding: `${SP.xs}px ${SP.m}px`,
   };
 
   return (
-    <div style={{ padding: 14 }}>
+    <div style={{ padding: SP.xxl }}>
       {/* Navigation header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+      <div style={{ ...flex.rowBetween, marginBottom: SP.base }}>
         <button
           onClick={onBack}
           title="Retour"
@@ -604,7 +628,7 @@ function PersonMiniPanel({
       </div>
 
       {/* Photo */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+      <div style={{ ...flex.center, marginBottom: SP.lg }}>
         <SmartPoster
           entityType="person"
           entityId={personId}
@@ -615,30 +639,30 @@ function PersonMiniPanel({
       </div>
 
       {/* Name + role */}
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>{person?.name ?? "…"}</div>
+      <div style={{ textAlign: "center", marginBottom: SP.xl }}>
+        <div style={{ fontSize: 15, fontWeight: WEIGHT.bold }}>{person?.name ?? "…"}</div>
         {person?.primary_role && (
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, textTransform: "capitalize" }}>
+          <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.s, textTransform: "capitalize" }}>
             {person.primary_role}
           </div>
         )}
         {person?.birth_date && (
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+          <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginTop: SP.xs }}>
             {person.birth_date}
             {person.birth_place ? ` — ${person.birth_place}` : ""}
           </div>
         )}
         {person?.death_date && (
-          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>† {person.death_date}</div>
+          <div style={{ fontSize: FONT.xs, color: COLORS.textMuted }}>† {person.death_date}</div>
         )}
       </div>
 
       {/* Biography excerpt */}
       {person?.biography && (
-        <div style={{ marginBottom: 12, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.xl, textAlign: "left" }}>
           <SectionTitle>Biographie</SectionTitle>
           <p style={{
-            fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.55, marginTop: 4,
+            fontSize: FONT.xs, color: COLORS.textSecondary, lineHeight: 1.55, marginTop: SP.s,
             display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden",
           }}>
             {person.biography}
@@ -650,7 +674,7 @@ function PersonMiniPanel({
       {personMovies && personMovies.length > 0 && (
         <div style={{ textAlign: "left" }}>
           <SectionTitle>Films ({personMovies.length})</SectionTitle>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, justifyContent: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: SP.m, marginTop: SP.m, justifyContent: "center" }}>
             {personMovies.map((m) => (
               <div
                 key={m.movie_id}
@@ -668,12 +692,12 @@ function PersonMiniPanel({
                   size="small"
                 />
                 <div style={{
-                  fontSize: 9, marginTop: 2, fontWeight: 500,
+                  fontSize: FONT.tiny, marginTop: SP.xs, fontWeight: WEIGHT.medium,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {m.title}
                 </div>
-                {m.year && <div style={{ fontSize: 8, color: "var(--text-muted)" }}>{m.year}</div>}
+                {m.year && <div style={{ fontSize: 8, color: COLORS.textMuted }}>{m.year}</div>}
               </div>
             ))}
           </div>
@@ -710,15 +734,15 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
   };
 
   return (
-    <div style={{ padding: 14, textAlign: "center" }}>
+    <div style={{ padding: SP.xxl, textAlign: "center" }}>
       {/* Navigation header: back chevron (left) + close chevron (right) */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+      <div style={{ ...flex.rowBetween, marginBottom: SP.s }}>
         <button
           onClick={onBack}
           title="Retour"
           style={{
             background: "none", border: "none", cursor: "pointer",
-            fontSize: 16, color: "var(--text-muted)", padding: "2px 6px",
+            fontSize: FONT.xl, color: COLORS.textMuted, padding: `${SP.xs}px ${SP.m}px`,
             visibility: canGoBack && onBack ? "visible" : "hidden",
           }}
         >
@@ -729,7 +753,7 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
           title="Fermer le panneau"
           style={{
             background: "none", border: "none", cursor: "pointer",
-            fontSize: 16, color: "var(--text-muted)", padding: "2px 6px",
+            fontSize: FONT.xl, color: COLORS.textMuted, padding: `${SP.xs}px ${SP.m}px`,
           }}
         >
           ›
@@ -737,7 +761,7 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
       </div>
       {/* Poster — clickable to open lightbox, with small edit icon */}
       <div
-        style={{ marginBottom: 10, display: "flex", justifyContent: "center", position: "relative", cursor: "pointer" }}
+        style={{ marginBottom: SP.lg, ...flex.center, position: "relative", cursor: "pointer" }}
         onClick={() => {
           const posterImg = allImages?.find((img) => img.image_type === "poster");
           if (posterImg) openLightbox(posterImg);
@@ -756,19 +780,17 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
             title="Modifier"
             style={{
               position: "absolute",
-              top: 4,
-              right: 4,
+              top: SP.s,
+              right: SP.s,
               width: 24,
               height: 24,
-              borderRadius: "50%",
+              borderRadius: RADIUS.full,
               border: "none",
               background: "rgba(0,0,0,0.55)",
               color: "#fff",
-              fontSize: 12,
+              fontSize: FONT.base,
               cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              ...flex.center,
               zIndex: 1,
             }}
           >
@@ -778,13 +800,13 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
       </div>
 
       {/* Title + year */}
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{movie.title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: WEIGHT.semi, marginBottom: SP.xs }}>{movie.title}</h2>
       {movie.original_title && movie.original_title !== movie.title && (
-        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>
+        <p style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginBottom: SP.s }}>
           {movie.original_title}
         </p>
       )}
-      <p style={{ fontSize: 10, color: "var(--text-secondary)", marginBottom: 8 }}>
+      <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary, marginBottom: SP.base }}>
         {[movie.year, movie.runtime ? `${movie.runtime} min` : null]
           .filter(Boolean)
           .join(" · ")}
@@ -792,18 +814,18 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 
       {/* Score + Genres on same line */}
       {(movie.primary_quality_score || (genres && genres.length > 0)) && (
-        <div style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 3, justifyContent: "center", alignItems: "center" }}>
+        <div style={{ marginBottom: SP.base, display: "flex", flexWrap: "wrap", gap: SP.s, justifyContent: "center", alignItems: "center" }}>
           {movie.primary_quality_score && <ScoreBadge score={movie.primary_quality_score} />}
           {genres && genres.map((g) => (
             <span
               key={g.id}
               style={{
-                padding: "1px 6px",
-                borderRadius: 999,
-                fontSize: 9,
-                fontWeight: 500,
-                background: "var(--color-primary-soft)",
-                color: "var(--color-primary)",
+                padding: `1px ${SP.m}px`,
+                borderRadius: RADIUS.full,
+                fontSize: FONT.tiny,
+                fontWeight: WEIGHT.medium,
+                background: COLORS.primarySoft,
+                color: COLORS.primary,
               }}
             >
               {g.name}
@@ -814,9 +836,9 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 
       {/* Synopsis */}
       {movie.overview && (
-        <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
           <SectionTitle>Synopsis</SectionTitle>
-          <p style={{ fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+          <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary, lineHeight: 1.5 }}>
             {movie.overview}
           </p>
         </div>
@@ -824,29 +846,29 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 
       {/* Tagline */}
       {movie.tagline && (
-        <p style={{ fontSize: 10, color: "var(--text-muted)", fontStyle: "italic", marginBottom: 10 }}>
+        <p style={{ fontSize: FONT.xs, color: COLORS.textMuted, fontStyle: "italic", marginBottom: SP.lg }}>
           {movie.tagline}
         </p>
       )}
 
       {/* Casting — 2 colonnes : réalisation | acteurs */}
       {(directors.length > 0 || actors.length > 0) && (
-        <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
           <SectionTitle>Casting</SectionTitle>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 8px", alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: `0 ${SP.base}px`, alignItems: "start" }}>
             {/* Réalisation */}
             <div>
-              <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Réalisation</span>
+              <span style={{ fontSize: FONT.tiny, color: COLORS.textMuted, fontWeight: WEIGHT.medium }}>Réalisation</span>
               {directors.map((d) => (
                 <div
                   key={d.person_id}
                   onClick={() => onPersonClick?.(d.person_id)}
                   style={{
-                    fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6,
+                    fontSize: FONT.xs, color: COLORS.textSecondary, paddingLeft: SP.m,
                     cursor: onPersonClick ? "pointer" : undefined,
                   }}
-                  onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = "var(--color-primary)")}
-                  onMouseLeave={(e) => onPersonClick && (e.currentTarget.style.color = "var(--text-secondary)")}
+                  onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = COLORS.primary)}
+                  onMouseLeave={(e) => onPersonClick && (e.currentTarget.style.color = COLORS.textSecondary)}
                 >
                   {d.name}
                 </div>
@@ -854,26 +876,26 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
             </div>
             {/* Acteurs */}
             <div>
-              <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 500 }}>Acteurs</span>
+              <span style={{ fontSize: FONT.tiny, color: COLORS.textMuted, fontWeight: WEIGHT.medium }}>Acteurs</span>
               {actors.slice(0, 6).map((a) => (
                 <div
                   key={a.person_id}
                   onClick={() => onPersonClick?.(a.person_id)}
                   style={{
-                    fontSize: 10, color: "var(--text-secondary)", paddingLeft: 6,
+                    fontSize: FONT.xs, color: COLORS.textSecondary, paddingLeft: SP.m,
                     cursor: onPersonClick ? "pointer" : undefined,
                   }}
-                  onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = "var(--color-primary)")}
-                  onMouseLeave={(e) => onPersonClick && (e.currentTarget.style.color = "var(--text-secondary)")}
+                  onMouseEnter={(e) => onPersonClick && (e.currentTarget.style.color = COLORS.primary)}
+                  onMouseLeave={(e) => onPersonClick && (e.currentTarget.style.color = COLORS.textSecondary)}
                 >
                   {a.name}
                   {a.character_name && (
-                    <span style={{ color: "var(--text-muted)", marginLeft: 3 }}>— {a.character_name}</span>
+                    <span style={{ color: COLORS.textMuted, marginLeft: SP.s }}>— {a.character_name}</span>
                   )}
                 </div>
               ))}
               {actors.length > 6 && (
-                <div style={{ fontSize: 9, color: "var(--text-muted)", paddingLeft: 6, marginTop: 2 }}>
+                <div style={{ fontSize: FONT.tiny, color: COLORS.textMuted, paddingLeft: SP.m, marginTop: SP.xs }}>
                   +{actors.length - 6} autres
                 </div>
               )}
@@ -884,9 +906,9 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 
       {/* Image Gallery */}
       {galleryImages.length > 0 && (
-        <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
           <SectionTitle>Images ({galleryImages.length})</SectionTitle>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+          <div style={{ display: "flex", gap: SP.s, flexWrap: "wrap", marginTop: SP.s }}>
             {galleryImages.map((img) => {
               const thumbSrc = img.path_thumb ?? img.path_medium;
               return (
@@ -896,12 +918,12 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
                   style={{
                     width: 72,
                     height: 48,
-                    borderRadius: 4,
+                    borderRadius: SP.s,
                     overflow: "hidden",
                     cursor: "pointer",
-                    background: "var(--bg-surface-alt)",
-                    border: "1px solid var(--border)",
-                    transition: "opacity 0.15s",
+                    background: COLORS.bgSurfaceAlt,
+                    border: `1px solid ${COLORS.border}`,
+                    transition: `opacity ${TRANSITION.fast}`,
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
@@ -916,8 +938,8 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
                   ) : (
                     <div style={{
                       width: "100%", height: "100%",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "var(--text-muted)", fontSize: 9,
+                      ...flex.center,
+                      color: COLORS.textMuted, fontSize: FONT.tiny,
                     }}>
                       {img.image_type}
                     </div>
@@ -931,7 +953,7 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
 
       {/* Versions */}
       {versions && versions.length > 0 && (
-        <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
           <SectionTitle>Versions ({versions.length})</SectionTitle>
           {versions.map((v) => (
             <VersionCard key={v.id} version={v} />
@@ -943,15 +965,15 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
       {movie.notes && (
         <div style={{ textAlign: "left" }}>
           <SectionTitle>Notes</SectionTitle>
-          <p style={{ fontSize: 10, color: "var(--text-secondary)" }}>{movie.notes}</p>
+          <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary }}>{movie.notes}</p>
         </div>
       )}
 
       {/* Similar movies */}
       {similar && similar.length > 0 && (
-        <div style={{ marginTop: 10, textAlign: "left" }}>
+        <div style={{ marginTop: SP.lg, textAlign: "left" }}>
           <SectionTitle>Films similaires ({similar.length})</SectionTitle>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4, justifyContent: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: SP.m, marginTop: SP.s, justifyContent: "center" }}>
             {similar.map((s) => (
               <div
                 key={s.id}
@@ -974,9 +996,9 @@ function MovieDetailPanel({ movie, onEdit, onPersonClick, onSelectMovie, onClose
                 />
                 <div
                   style={{
-                    fontSize: 10,
-                    fontWeight: 500,
-                    marginTop: 3,
+                    fontSize: FONT.xs,
+                    fontWeight: WEIGHT.medium,
+                    marginTop: SP.s,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -1027,37 +1049,37 @@ function VersionCard({ version: v }: { version: import("../lib/api").MediaVersio
   return (
     <div
       style={{
-        padding: "5px 8px",
+        padding: `5px ${SP.base}px`,
         borderRadius: 5,
-        marginBottom: 3,
-        background: "var(--bg-surface-alt)",
-        border: "1px solid var(--border)",
+        marginBottom: SP.s,
+        background: COLORS.bgSurfaceAlt,
+        border: `1px solid ${COLORS.border}`,
       }}
     >
       {/* Header: label + score */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, flex: 1 }}>
+      <div style={{ ...flex.rowGap(SP.m), marginBottom: SP.s }}>
+        <span style={{ fontSize: FONT.xs, fontWeight: WEIGHT.semi, flex: 1 }}>
           {v.label || "Version principale"}
         </span>
         {v.quality_score && <ScoreBadge score={v.quality_score} />}
       </div>
 
       {/* 2-column body: tech info | file locations */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 8px", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: `0 ${SP.base}px`, alignItems: "start" }}>
         {/* Left: technical data */}
         <div>
           {techParts.length > 0 && (
-            <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 1 }}>
+            <div style={{ fontSize: FONT.tiny, color: COLORS.textSecondary, marginBottom: 1 }}>
               {techParts.join(" · ")}
             </div>
           )}
           {audioParts.length > 0 && (
-            <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>
+            <div style={{ fontSize: FONT.tiny, color: COLORS.textMuted, marginBottom: 1 }}>
               {audioParts.join(" · ")}
             </div>
           )}
           {v.video_bitrate && (
-            <div style={{ fontSize: 8, color: "var(--text-muted)" }}>
+            <div style={{ fontSize: 8, color: COLORS.textMuted }}>
               {Math.round(v.video_bitrate / 1000)} kbps
               {v.duration ? ` · ${Math.round(v.duration / 60)} min` : ""}
             </div>
@@ -1073,17 +1095,17 @@ function VersionCard({ version: v }: { version: import("../lib/api").MediaVersio
               ? f.file_path.slice(lib.path.length).replace(/^[\\/]/, "")
               : f.file_name;
             return (
-              <div key={f.id} title={f.file_path} style={{ cursor: "default", marginBottom: 2 }}>
+              <div key={f.id} title={f.file_path} style={{ cursor: "default", marginBottom: SP.xs }}>
                 <div style={{
-                  fontSize: 9, fontWeight: 600,
-                  color: f.is_available ? "var(--color-primary)" : "var(--text-muted)",
-                  display: "flex", alignItems: "center", gap: 3,
+                  fontSize: FONT.tiny, fontWeight: WEIGHT.semi,
+                  color: f.is_available ? COLORS.primary : COLORS.textMuted,
+                  ...flex.rowGap(SP.s),
                 }}>
                   <span style={{ fontSize: 7 }}>{f.is_available ? "●" : "○"}</span>
                   {diskLabel}
                 </div>
                 <div style={{
-                  fontSize: 8, color: "var(--text-muted)", fontFamily: "monospace",
+                  fontSize: 8, color: COLORS.textMuted, fontFamily: "monospace",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   {relativePath}
@@ -1121,10 +1143,10 @@ function GalleryView({
       style={{
         flex: 1,
         overflowY: "auto",
-        padding: 20,
+        padding: SP.huge,
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-        gap: 14,
+        gap: SP.xxl,
         alignContent: "start",
       }}
     >
@@ -1180,9 +1202,9 @@ function GalleryCard({
           position: "relative",
           width: "100%",
           paddingBottom: "150%",
-          borderRadius: 6,
+          borderRadius: RADIUS.md,
           overflow: "hidden",
-          background: "var(--bg-surface-alt)",
+          background: COLORS.bgSurfaceAlt,
           outline: isMultiSelected ? "3px solid #F59E0B" : undefined,
           outlineOffset: 2,
         }}
@@ -1190,19 +1212,17 @@ function GalleryCard({
         {isMultiSelected && (
           <div style={{
             position: "absolute",
-            top: 6,
-            left: 6,
+            top: SP.m,
+            left: SP.m,
             width: 18,
             height: 18,
-            borderRadius: "50%",
+            borderRadius: RADIUS.full,
             background: "#F59E0B",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            ...flex.center,
             zIndex: 2,
-            fontSize: 11,
+            fontSize: FONT.sm,
             color: "#fff",
-            fontWeight: 700,
+            fontWeight: WEIGHT.bold,
           }}>✓</div>
         )}
         {posterSrc ? (
@@ -1222,12 +1242,10 @@ function GalleryCard({
             style={{
               position: "absolute",
               inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--text-muted)",
+              ...flex.center,
+              color: COLORS.textMuted,
               fontSize: 28,
-              fontWeight: 700,
+              fontWeight: WEIGHT.bold,
             }}
           >
             {m.title.slice(0, 2).toUpperCase()}
@@ -1235,16 +1253,16 @@ function GalleryCard({
         )}
 
         {m.primary_quality_score && (
-          <div style={{ position: "absolute", top: 6, right: 6 }}>
+          <div style={{ position: "absolute", top: SP.m, right: SP.m }}>
             <ScoreBadge score={m.primary_quality_score} />
           </div>
         )}
       </div>
       <p
         style={{
-          fontSize: 12,
-          fontWeight: 500,
-          marginTop: 6,
+          fontSize: FONT.base,
+          fontWeight: WEIGHT.medium,
+          marginTop: SP.m,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1252,7 +1270,7 @@ function GalleryCard({
       >
         {m.title}
       </p>
-      <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{m.year}</p>
+      <p style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>{m.year}</p>
     </div>
   );
 }
@@ -1289,23 +1307,21 @@ function SelectionBar({
     <div
       style={{
         position: "absolute",
-        bottom: 16,
+        bottom: SP.xxxl,
         left: "50%",
         transform: "translateX(-50%)",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "10px 20px",
-        background: "var(--color-primary)",
+        ...flex.rowGap(SP.xl),
+        padding: `${SP.lg}px ${SP.huge}px`,
+        background: COLORS.primary,
         color: "#fff",
         borderRadius: 28,
         boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
         zIndex: 200,
-        fontSize: 13,
+        fontSize: FONT.md,
         whiteSpace: "nowrap",
       }}
     >
-      <span style={{ fontWeight: 600 }}>
+      <span style={{ fontWeight: WEIGHT.semi }}>
         {count} film{count > 1 ? "s" : ""} sélectionné{count > 1 ? "s" : ""}
       </span>
 
@@ -1313,14 +1329,14 @@ function SelectionBar({
         <button
           onClick={() => setShowPicker((v) => !v)}
           style={{
-            padding: "5px 14px",
-            borderRadius: 14,
+            padding: `5px ${SP.xxl}px`,
+            borderRadius: SP.xxl,
             border: "1px solid rgba(255,255,255,0.4)",
             background: "rgba(255,255,255,0.18)",
             color: "#fff",
             cursor: "pointer",
-            fontSize: 12,
-            fontWeight: 600,
+            fontSize: FONT.base,
+            fontWeight: WEIGHT.semi,
           }}
         >
           Ajouter à une collection ▾
@@ -1333,9 +1349,9 @@ function SelectionBar({
               bottom: "calc(100% + 8px)",
               left: "50%",
               transform: "translateX(-50%)",
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
+              background: COLORS.bgSurface,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: RADIUS.lg,
               overflow: "hidden",
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               minWidth: 200,
@@ -1344,19 +1360,19 @@ function SelectionBar({
           >
             <div
               style={{
-                padding: "7px 12px 5px",
-                fontSize: 10,
-                fontWeight: 600,
-                color: "var(--text-muted)",
+                padding: `7px ${SP.xl}px 5px`,
+                fontSize: FONT.xs,
+                fontWeight: WEIGHT.semi,
+                color: COLORS.textMuted,
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
-                borderBottom: "1px solid var(--border)",
+                borderBottom: `1px solid ${COLORS.border}`,
               }}
             >
               Choisir une collection
             </div>
             {collections.length === 0 && (
-              <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted)" }}>
+              <div style={{ padding: `${SP.base}px ${SP.xl}px`, fontSize: FONT.base, color: COLORS.textMuted }}>
                 Aucune collection
               </div>
             )}
@@ -1365,13 +1381,13 @@ function SelectionBar({
                 key={c.id}
                 onClick={() => { onAddToCollection(c.id); setShowPicker(false); }}
                 style={{
-                  padding: "8px 14px",
+                  padding: `${SP.base}px ${SP.xxl}px`,
                   cursor: "pointer",
-                  color: "var(--text-main)",
-                  fontSize: 13,
-                  borderBottom: "1px solid var(--border)",
+                  color: COLORS.textMain,
+                  fontSize: FONT.md,
+                  borderBottom: `1px solid ${COLORS.border}`,
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-alt)")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = COLORS.bgSurfaceAlt)}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 {c.name}
@@ -1389,9 +1405,9 @@ function SelectionBar({
           background: "transparent",
           color: "rgba(255,255,255,0.8)",
           cursor: "pointer",
-          fontSize: 18,
+          fontSize: FONT.xxl,
           lineHeight: 1,
-          padding: "0 2px",
+          padding: `0 ${SP.xs}px`,
         }}
       >
         ×
@@ -1448,30 +1464,30 @@ function ContextMenu({
         left,
         top,
         width: menuWidth,
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
+        background: COLORS.bgSurface,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: RADIUS.lg,
         boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
         zIndex: 9999,
         overflow: "hidden",
-        fontSize: 12,
+        fontSize: FONT.base,
       }}
     >
       <div
         style={{
-          padding: "8px 12px 6px",
-          fontSize: 10,
-          fontWeight: 600,
-          color: "var(--text-muted)",
+          padding: `${SP.base}px ${SP.xl}px ${SP.m}px`,
+          fontSize: FONT.xs,
+          fontWeight: WEIGHT.semi,
+          color: COLORS.textMuted,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: `1px solid ${COLORS.border}`,
         }}
       >
         {movieIds.length > 1 ? `Ajouter ${movieIds.length} films à` : "Ajouter à une collection"}
       </div>
       {collections.length === 0 && (
-        <div style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: 11 }}>
+        <div style={{ padding: `${SP.base}px ${SP.xl}px`, color: COLORS.textMuted, fontSize: FONT.sm }}>
           Aucune collection
         </div>
       )}
@@ -1480,12 +1496,12 @@ function ContextMenu({
           key={c.id}
           onClick={() => onAdd(c.id)}
           style={{
-            padding: "7px 12px",
+            padding: `7px ${SP.xl}px`,
             cursor: "pointer",
-            color: "var(--text-main)",
-            borderBottom: "1px solid var(--border)",
+            color: COLORS.textMain,
+            borderBottom: `1px solid ${COLORS.border}`,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-alt)")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = COLORS.bgSurfaceAlt)}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           {c.name}

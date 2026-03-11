@@ -216,7 +216,7 @@ pub async fn refresh_entity_images(
             image_cache::cache_studio_images(pool, &cache, entity_id)
                 .await.map_err(|e| e.to_string())?;
         }
-        _ => return Err(format!("Unknown entity type: {}", entity_type)),
+        _ => return Err(format!("Type d'entité inconnu : {}", entity_type)),
     }
     Ok(())
 }

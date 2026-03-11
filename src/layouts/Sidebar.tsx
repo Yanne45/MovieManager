@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { DatabaseInfo, RecentDatabase } from "../lib/api";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, SIZES, TRANSITION, flex } from "../lib/tokens";
 
 interface SidebarProps {
   currentPage: string;
@@ -54,52 +55,50 @@ export function Sidebar({
   return (
     <aside
       style={{
-        width: 200,
+        width: SIZES.sidebarWidth,
         flexShrink: 0,
-        background: "var(--bg-surface)",
-        borderRight: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
+        background: COLORS.bgSurface,
+        borderRight: `1px solid ${COLORS.border}`,
+        ...flex.col,
         overflow: "hidden",
       }}
     >
       {/* App title */}
       <div
         style={{
-          padding: "16px 16px 6px",
+          padding: `${SP.xxxl}px ${SP.xxxl}px ${SP.m}px`,
           fontSize: 15,
-          fontWeight: 600,
-          color: "var(--text-main)",
+          fontWeight: WEIGHT.semi,
+          color: COLORS.textMain,
         }}
       >
         MovieManager
       </div>
 
       {/* Database selector */}
-      <div style={{ padding: "0 12px 10px", position: "relative" }}>
+      <div style={{ padding: `0 ${SP.xl}px ${SP.lg}px`, position: "relative" }}>
         <button
           onClick={() => setDbMenuOpen(!dbMenuOpen)}
           style={{
             width: "100%",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 8px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface-alt)",
+            ...flex.row,
+            gap: SP.m,
+            padding: `${SP.m}px ${SP.base}px`,
+            borderRadius: RADIUS.md,
+            border: `1px solid ${COLORS.border}`,
+            background: COLORS.bgSurfaceAlt,
             cursor: "pointer",
-            fontSize: 11,
-            color: "var(--text-secondary)",
+            fontSize: FONT.sm,
+            color: COLORS.textSecondary,
             textAlign: "left",
           }}
         >
           <span
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              background: "var(--success)",
+              width: SP.base,
+              height: SP.base,
+              borderRadius: SP.s,
+              background: COLORS.success,
               flexShrink: 0,
             }}
           />
@@ -109,12 +108,12 @@ export function Sidebar({
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              fontWeight: 500,
+              fontWeight: WEIGHT.medium,
             }}
           >
             {currentDb?.name || "Aucune base"}
           </span>
-          <span style={{ fontSize: 9, color: "var(--text-muted)" }}>▾</span>
+          <span style={{ fontSize: FONT.tiny, color: COLORS.textMuted }}>▾</span>
         </button>
 
         {/* Dropdown menu */}
@@ -123,12 +122,12 @@ export function Sidebar({
             style={{
               position: "absolute",
               top: "100%",
-              left: 12,
-              right: 12,
+              left: SP.xl,
+              right: SP.xl,
               zIndex: 100,
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
+              background: COLORS.bgSurface,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: RADIUS.lg,
               boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
               overflow: "hidden",
             }}
@@ -138,11 +137,11 @@ export function Sidebar({
               <>
                 <div
                   style={{
-                    padding: "6px 10px 4px",
-                    fontSize: 9,
-                    fontWeight: 600,
+                    padding: `${SP.m}px ${SP.lg}px ${SP.s}px`,
+                    fontSize: FONT.tiny,
+                    fontWeight: WEIGHT.semi,
                     textTransform: "uppercase",
-                    color: "var(--text-muted)",
+                    color: COLORS.textMuted,
                     letterSpacing: "0.05em",
                   }}
                 >
@@ -159,23 +158,22 @@ export function Sidebar({
                       }}
                       style={{
                         width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "7px 10px",
+                        ...flex.row,
+                        gap: SP.m,
+                        padding: `7px ${SP.lg}px`,
                         border: "none",
-                        background: isCurrent ? "var(--color-primary-soft)" : "transparent",
+                        background: isCurrent ? COLORS.primarySoft : "transparent",
                         cursor: isCurrent ? "default" : "pointer",
-                        fontSize: 12,
-                        color: isCurrent ? "var(--color-primary)" : "var(--text-main)",
-                        fontWeight: isCurrent ? 600 : 400,
+                        fontSize: FONT.base,
+                        color: isCurrent ? COLORS.primary : COLORS.textMain,
+                        fontWeight: isCurrent ? WEIGHT.semi : WEIGHT.normal,
                         textAlign: "left",
                       }}
                     >
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {db.name}
                       </span>
-                      {isCurrent && <span style={{ fontSize: 9, color: "var(--color-primary)" }}>●</span>}
+                      {isCurrent && <span style={{ fontSize: FONT.tiny, color: COLORS.primary }}>●</span>}
                     </button>
                   );
                 })}
@@ -183,19 +181,19 @@ export function Sidebar({
             )}
 
             {/* Separator */}
-            <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+            <div style={{ margin: `${SP.s}px ${SP.base}px`, borderTop: `1px solid ${COLORS.border}` }} />
 
             {/* Actions */}
             <button
               onClick={() => { onBrowseDatabase?.(); setDbMenuOpen(false); }}
               style={{
                 width: "100%",
-                padding: "7px 10px",
+                padding: `7px ${SP.lg}px`,
                 border: "none",
                 background: "transparent",
                 cursor: "pointer",
-                fontSize: 12,
-                color: "var(--text-secondary)",
+                fontSize: FONT.base,
+                color: COLORS.textSecondary,
                 textAlign: "left",
               }}
             >
@@ -205,12 +203,12 @@ export function Sidebar({
               onClick={() => { onCreateDatabase?.(); setDbMenuOpen(false); }}
               style={{
                 width: "100%",
-                padding: "7px 10px",
+                padding: `7px ${SP.lg}px`,
                 border: "none",
                 background: "transparent",
                 cursor: "pointer",
-                fontSize: 12,
-                color: "var(--text-secondary)",
+                fontSize: FONT.base,
+                color: COLORS.textSecondary,
                 textAlign: "left",
               }}
             >
@@ -232,7 +230,7 @@ export function Sidebar({
         ))}
       </SidebarSection>
 
-      <div style={{ margin: "4px 16px", borderBottom: "1px solid var(--border)" }} />
+      <div style={{ margin: `${SP.s}px ${SP.xxxl}px`, borderBottom: `1px solid ${COLORS.border}` }} />
 
       {/* Tools section */}
       <SidebarSection label="OUTILS">
@@ -304,15 +302,15 @@ export function Sidebar({
 
 function SidebarSection({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={{ padding: "8px 0" }}>
+    <div style={{ padding: `${SP.base}px 0` }}>
       <div
         style={{
-          padding: "0 16px 6px",
-          fontSize: 10,
-          fontWeight: 600,
+          padding: `0 ${SP.xxxl}px ${SP.m}px`,
+          fontSize: FONT.xs,
+          fontWeight: WEIGHT.semi,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
-          color: "var(--text-muted)",
+          color: COLORS.textMuted,
         }}
       >
         {label}
@@ -335,23 +333,22 @@ function SidebarItem({
   badge?: number;
   indent?: number;
 }) {
-  const paddingLeft = 16 + indent * 16;
+  const paddingLeft = SP.xxxl + indent * SP.xxxl;
   return (
     <button
       onClick={onClick}
       style={{
-        display: "flex",
-        alignItems: "center",
+        ...flex.row,
         width: "100%",
-        padding: `7px 16px 7px ${paddingLeft}px`,
-        fontSize: indent > 0 ? 12 : 13,
-        fontWeight: active ? 600 : 400,
-        color: active ? "var(--color-primary)" : "var(--text-secondary)",
-        background: active ? "var(--color-primary-soft)" : "transparent",
+        padding: `7px ${SP.xxxl}px 7px ${paddingLeft}px`,
+        fontSize: indent > 0 ? FONT.base : FONT.md,
+        fontWeight: active ? WEIGHT.semi : WEIGHT.normal,
+        color: active ? COLORS.primary : COLORS.textSecondary,
+        background: active ? COLORS.primarySoft : "transparent",
         border: "none",
         cursor: "pointer",
         textAlign: "left",
-        transition: "background 0.1s",
+        transition: `background ${TRANSITION.fast}`,
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.background = "var(--bg-surface-alt)";
@@ -366,14 +363,12 @@ function SidebarItem({
           style={{
             minWidth: 18,
             height: 18,
-            borderRadius: 9,
-            background: "var(--error)",
+            borderRadius: RADIUS.full,
+            background: COLORS.error,
             color: "#fff",
-            fontSize: 10,
-            fontWeight: 700,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            fontSize: FONT.xs,
+            fontWeight: WEIGHT.bold,
+            ...flex.center,
             padding: "0 5px",
           }}
         >
@@ -401,21 +396,20 @@ function CollapsibleItem({
   indent?: number;
   onClick?: () => void;
 }) {
-  const paddingLeft = 16 + indent * 16;
+  const paddingLeft = SP.xxxl + indent * SP.xxxl;
   return (
     <div>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
+          ...flex.row,
           width: "100%",
-          padding: `7px 12px 7px ${paddingLeft}px`,
-          fontSize: indent > 0 ? 12 : 13,
-          fontWeight: active ? 600 : 500,
-          color: active ? "var(--color-primary)" : "var(--text-secondary)",
-          background: active && !open ? "var(--color-primary-soft)" : "transparent",
+          padding: `7px ${SP.xl}px 7px ${paddingLeft}px`,
+          fontSize: indent > 0 ? FONT.base : FONT.md,
+          fontWeight: active ? WEIGHT.semi : WEIGHT.medium,
+          color: active ? COLORS.primary : COLORS.textSecondary,
+          background: active && !open ? COLORS.primarySoft : "transparent",
           cursor: "pointer",
-          transition: "background 0.1s",
+          transition: `background ${TRANSITION.fast}`,
         }}
         onMouseEnter={(e) => {
           if (!active || open) e.currentTarget.style.background = "var(--bg-surface-alt)";
@@ -431,12 +425,11 @@ function CollapsibleItem({
             background: "none",
             border: "none",
             cursor: "pointer",
-            padding: "0 4px 0 0",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            display: "flex",
-            alignItems: "center",
-            transition: "transform 0.15s",
+            padding: `0 ${SP.s}px 0 0`,
+            fontSize: FONT.tiny,
+            color: COLORS.textMuted,
+            ...flex.row,
+            transition: `transform ${TRANSITION.fast}`,
             transform: open ? "rotate(90deg)" : "rotate(0deg)",
           }}
         >

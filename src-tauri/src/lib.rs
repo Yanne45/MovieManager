@@ -197,6 +197,7 @@ pub fn run() {
             commands::scan::import_dropped_paths,
             commands::scan::preview_scan_paths,
             commands::scan::import_files,
+            commands::scan::dry_run_import,
             // TMDB commands
             commands::tmdb::search_movie_tmdb,
             commands::tmdb::search_series_tmdb,
@@ -217,6 +218,9 @@ pub fn run() {
             commands::history::get_entity_history,
             commands::history::get_recent_changes,
             commands::history::rollback_change,
+            commands::history::get_operations,
+            commands::history::get_operation_changes,
+            commands::history::rollback_operation,
             // Inbox commands
             commands::inbox::get_inbox_items,
             commands::inbox::get_inbox_count,
@@ -224,6 +228,10 @@ pub fn run() {
             commands::inbox::resolve_inbox_ignore,
             commands::inbox::reopen_inbox_item,
             commands::inbox::delete_inbox_item,
+            commands::inbox::batch_preview_inbox,
+            commands::inbox::batch_ignore_inbox,
+            commands::inbox::batch_reopen_inbox,
+            commands::inbox::batch_delete_inbox,
             // Image commands
             commands::images::get_image_paths,
             commands::images::get_image_cache_root,
@@ -265,6 +273,9 @@ pub fn run() {
             commands::collections::add_collection_item,
             commands::collections::remove_collection_item,
             commands::collections::reorder_collection_item,
+            commands::collections::create_smart_collection,
+            commands::collections::update_smart_rules,
+            commands::collections::get_smart_collection_items,
             // Episodes commands
             commands::episodes::update_episode,
             // Stats commands

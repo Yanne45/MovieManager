@@ -1,5 +1,9 @@
-import { useState, type ReactNode } from "react";
-import { SCORE_STYLES, STATUS_STYLES } from "../lib/tokens";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
+import {
+  COLORS, SCORE_STYLES, STATUS_STYLES,
+  SP, FONT, WEIGHT, RADIUS, TRANSITION,
+  flex, btn, input as inputPreset,
+} from "../lib/tokens";
 
 // ============================================================================
 // Score Badge (A/B/C/D)
@@ -15,14 +19,12 @@ export function ScoreBadge({ score }: ScoreBadgeProps) {
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
+        ...flex.center,
         width: 24,
         height: 20,
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 700,
+        borderRadius: RADIUS.sm,
+        fontSize: FONT.sm,
+        fontWeight: WEIGHT.bold,
         background: style.bg,
         color: style.text,
       }}
@@ -46,10 +48,10 @@ export function StatusBadge({ status }: StatusBadgeProps) {
     <span
       style={{
         display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 600,
+        padding: `0 ${SP.base}px`,
+        borderRadius: RADIUS.full,
+        fontSize: FONT.sm,
+        fontWeight: WEIGHT.semi,
         background: style.bg,
         color: style.text,
       }}
@@ -73,19 +75,19 @@ export function CompletenessBar({ owned, total, width = 80 }: CompletenessBarPro
   const pct = total > 0 ? Math.round((owned / total) * 100) : 0;
   const color =
     pct === 100
-      ? "var(--success)"
+      ? COLORS.success
       : pct > 0
-        ? "var(--warning)"
-        : "var(--error)";
+        ? COLORS.warning
+        : COLORS.error;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={flex.rowGap(SP.m)}>
       <div
         style={{
           width,
           height: 6,
-          borderRadius: 3,
-          background: "var(--bg-surface-alt)",
+          borderRadius: RADIUS.sm,
+          background: COLORS.bgSurfaceAlt,
           overflow: "hidden",
         }}
       >
@@ -93,13 +95,13 @@ export function CompletenessBar({ owned, total, width = 80 }: CompletenessBarPro
           style={{
             width: `${pct}%`,
             height: "100%",
-            borderRadius: 3,
+            borderRadius: RADIUS.sm,
             background: color,
-            transition: "width 0.3s",
+            transition: `width ${TRANSITION.slow}`,
           }}
         />
       </div>
-      <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: FONT.sm, color: COLORS.textMuted, whiteSpace: "nowrap" }}>
         {owned}/{total} ({pct}%)
       </span>
     </div>
@@ -120,15 +122,14 @@ export function Tag({ label, color, onRemove }: TagProps) {
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "2px 10px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 500,
-        background: color ? `${color}18` : "var(--color-primary-soft)",
-        color: color || "var(--color-primary)",
+        ...flex.row,
+        gap: SP.s,
+        padding: `0 ${SP.lg}px`,
+        borderRadius: RADIUS.full,
+        fontSize: FONT.sm,
+        fontWeight: WEIGHT.medium,
+        background: color ? `${color}18` : COLORS.primarySoft,
+        color: color || COLORS.primary,
       }}
     >
       {label}
@@ -140,7 +141,7 @@ export function Tag({ label, color, onRemove }: TagProps) {
             border: "none",
             cursor: "pointer",
             color: "inherit",
-            fontSize: 14,
+            fontSize: FONT.lg,
             padding: 0,
             lineHeight: 1,
           }}
@@ -164,8 +165,8 @@ interface PosterThumbProps {
 }
 
 const POSTER_SIZES = {
-  small: { width: 32, height: 44, fontSize: 10 },
-  medium: { width: 48, height: 66, fontSize: 12 },
+  small: { width: 32, height: 44, fontSize: FONT.xs },
+  medium: { width: 48, height: 66, fontSize: FONT.base },
   large: { width: 220, height: 330, fontSize: 32 },
 };
 
@@ -185,7 +186,7 @@ export function PosterThumb({ title, posterUrl, color, size = "small" }: PosterT
         style={{
           width: dims.width,
           height: dims.height,
-          borderRadius: 4,
+          borderRadius: RADIUS.sm,
           objectFit: "cover",
         }}
       />
@@ -195,16 +196,14 @@ export function PosterThumb({ title, posterUrl, color, size = "small" }: PosterT
   return (
     <div
       style={{
+        ...flex.center,
         width: dims.width,
         height: dims.height,
-        borderRadius: 4,
+        borderRadius: RADIUS.sm,
         background: color || "#4a5568",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         color: "rgba(255,255,255,0.7)",
         fontSize: dims.fontSize,
-        fontWeight: 700,
+        fontWeight: WEIGHT.bold,
         flexShrink: 0,
       }}
     >
@@ -235,15 +234,15 @@ export function UnderlineInput({
   const [focused, setFocused] = useState(false);
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: SP.xxxl }}>
       <label
         style={{
           display: "block",
-          fontSize: 11,
-          fontWeight: 500,
-          color: focused ? "var(--color-primary)" : "var(--text-muted)",
-          marginBottom: 4,
-          transition: "color 0.15s",
+          fontSize: FONT.sm,
+          fontWeight: WEIGHT.medium,
+          color: focused ? COLORS.primary : COLORS.textMuted,
+          marginBottom: SP.s,
+          transition: `color ${TRANSITION.fast}`,
         }}
       >
         {label}
@@ -257,14 +256,14 @@ export function UnderlineInput({
         onBlur={() => setFocused(false)}
         style={{
           width: "100%",
-          padding: "6px 0",
-          fontSize: 14,
-          color: disabled ? "var(--text-muted)" : "var(--text-main)",
+          padding: `${SP.m}px 0`,
+          fontSize: FONT.lg,
+          color: disabled ? COLORS.textMuted : COLORS.textMain,
           background: "transparent",
           border: "none",
-          borderBottom: `${focused ? 2 : 1}px solid ${focused ? "var(--color-primary)" : "var(--border)"}`,
+          borderBottom: `${focused ? 2 : 1}px solid ${focused ? COLORS.primary : COLORS.border}`,
           outline: "none",
-          transition: "border-color 0.15s",
+          transition: `border-color ${TRANSITION.fast}`,
         }}
       />
     </div>
@@ -291,14 +290,14 @@ export function UnderlineTextarea({
   const [focused, setFocused] = useState(false);
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: SP.xxxl }}>
       <label
         style={{
           display: "block",
-          fontSize: 11,
-          fontWeight: 500,
-          color: focused ? "var(--color-primary)" : "var(--text-muted)",
-          marginBottom: 4,
+          fontSize: FONT.sm,
+          fontWeight: WEIGHT.medium,
+          color: focused ? COLORS.primary : COLORS.textMuted,
+          marginBottom: SP.s,
         }}
       >
         {label}
@@ -311,12 +310,12 @@ export function UnderlineTextarea({
         onBlur={() => setFocused(false)}
         style={{
           width: "100%",
-          padding: "6px 0",
-          fontSize: 14,
-          color: "var(--text-main)",
+          padding: `${SP.m}px 0`,
+          fontSize: FONT.lg,
+          color: COLORS.textMain,
           background: "transparent",
           border: "none",
-          borderBottom: `${focused ? 2 : 1}px solid ${focused ? "var(--color-primary)" : "var(--border)"}`,
+          borderBottom: `${focused ? 2 : 1}px solid ${focused ? COLORS.primary : COLORS.border}`,
           outline: "none",
           resize: "vertical",
           fontFamily: "inherit",
@@ -342,9 +341,9 @@ export function TabBar({ tabs, active, onChange }: TabBarProps) {
     <div
       style={{
         display: "flex",
-        borderBottom: "1px solid var(--border)",
-        background: "var(--bg-surface)",
-        padding: "0 16px",
+        borderBottom: `1px solid ${COLORS.border}`,
+        background: COLORS.bgSurface,
+        padding: `0 ${SP.xxxl}px`,
       }}
     >
       {tabs.map((tab) => (
@@ -352,17 +351,17 @@ export function TabBar({ tabs, active, onChange }: TabBarProps) {
           key={tab.id}
           onClick={() => onChange(tab.id)}
           style={{
-            padding: "10px 16px",
-            fontSize: 13,
-            fontWeight: active === tab.id ? 600 : 400,
-            color: active === tab.id ? "var(--color-primary)" : "var(--text-secondary)",
+            padding: `${SP.lg}px ${SP.xxxl}px`,
+            fontSize: FONT.md,
+            fontWeight: active === tab.id ? WEIGHT.semi : WEIGHT.normal,
+            color: active === tab.id ? COLORS.primary : COLORS.textSecondary,
             background: "none",
             border: "none",
             borderBottom: active === tab.id
-              ? "2px solid var(--color-primary)"
+              ? `2px solid ${COLORS.primary}`
               : "2px solid transparent",
             cursor: "pointer",
-            transition: "all 0.15s",
+            transition: `all ${TRANSITION.fast}`,
           }}
         >
           {tab.label}
@@ -378,18 +377,20 @@ export function TabBar({ tabs, active, onChange }: TabBarProps) {
 
 interface SectionTitleProps {
   children: ReactNode;
+  style?: React.CSSProperties;
 }
 
-export function SectionTitle({ children }: SectionTitleProps) {
+export function SectionTitle({ children, style }: SectionTitleProps) {
   return (
     <div
       style={{
-        fontSize: 10,
-        fontWeight: 600,
+        fontSize: FONT.xs,
+        fontWeight: WEIGHT.semi,
         textTransform: "uppercase",
         letterSpacing: "0.06em",
-        color: "var(--text-muted)",
-        marginBottom: 6,
+        color: COLORS.textMuted,
+        marginBottom: SP.m,
+        ...style,
       }}
     >
       {children}
@@ -409,12 +410,10 @@ export function EmptyState({ message }: EmptyStateProps) {
   return (
     <div
       style={{
+        ...flex.center,
         height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "var(--text-muted)",
-        fontSize: 13,
+        color: COLORS.textMuted,
+        fontSize: FONT.md,
       }}
     >
       {message}
@@ -430,22 +429,20 @@ export function LoadingSpinner({ message }: { message?: string }) {
   return (
     <div
       style={{
+        ...flex.center,
         height: "100%",
-        display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        color: "var(--text-muted)",
-        fontSize: 13,
+        gap: SP.xl,
+        color: COLORS.textMuted,
+        fontSize: FONT.md,
       }}
     >
       <div
         style={{
           width: 28,
           height: 28,
-          border: "3px solid var(--border)",
-          borderTopColor: "var(--color-primary)",
+          border: `3px solid ${COLORS.border}`,
+          borderTopColor: COLORS.primary,
           borderRadius: "50%",
           animation: "mm-spin 0.8s linear infinite",
         }}
@@ -456,34 +453,178 @@ export function LoadingSpinner({ message }: { message?: string }) {
   );
 }
 
+// ============================================================================
+// Pagination
+// ============================================================================
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 0] as const;
+const PAGE_SIZE_LABELS: Record<number, string> = { 0: "Tout" };
+
+export interface PaginationState<T> {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  pageItems: T[];
+  setPage: (p: number) => void;
+  setPageSize: (s: number) => void;
+}
+
+export function usePagination<T>(items: T[], initialPageSize = 50): PaginationState<T> {
+  const [page, setPageRaw] = useState(1);
+  const [pageSize, setPageSizeRaw] = useState(initialPageSize);
+
+  const setPageSize = useCallback((s: number) => {
+    setPageSizeRaw(s);
+    setPageRaw(1);
+  }, []);
+
+  const totalItems = items.length;
+  const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(totalItems / pageSize));
+
+  const safePage = Math.min(page, totalPages);
+  if (safePage !== page) setPageRaw(safePage);
+
+  const pageItems = useMemo(() => {
+    if (pageSize === 0) return items;
+    const start = (safePage - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, safePage, pageSize]);
+
+  return {
+    page: safePage,
+    pageSize,
+    totalItems,
+    totalPages,
+    pageItems,
+    setPage: setPageRaw,
+    setPageSize,
+  };
+}
+
+interface PaginationBarProps {
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}
+
+export function PaginationBar({
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: PaginationBarProps) {
+  if (totalItems === 0) return null;
+
+  const pageBtnStyle: React.CSSProperties = {
+    ...btn.base,
+    padding: `0 ${SP.lg}px`,
+    borderRadius: RADIUS.sm,
+    background: COLORS.bgSurface,
+    color: COLORS.textSecondary,
+    fontSize: FONT.base,
+  };
+  const disabledBtn: React.CSSProperties = { ...pageBtnStyle, opacity: 0.4, cursor: "default" };
+
+  return (
+    <div
+      style={{
+        ...flex.rowBetween,
+        padding: `${SP.m}px ${SP.xl}px`,
+        borderTop: `1px solid ${COLORS.border}`,
+        background: COLORS.bgSurfaceAlt,
+        fontSize: FONT.base,
+        color: COLORS.textMuted,
+        flexShrink: 0,
+      }}
+    >
+      <span>{totalItems} element{totalItems > 1 ? "s" : ""}</span>
+
+      {totalPages > 1 && (
+        <div style={flex.rowGap(SP.m)}>
+          <button
+            style={page <= 1 ? disabledBtn : pageBtnStyle}
+            disabled={page <= 1}
+            onClick={() => onPageChange(1)}
+            title="Premiere page"
+          >
+            {"<<"}
+          </button>
+          <button
+            style={page <= 1 ? disabledBtn : pageBtnStyle}
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+          >
+            {"<"}
+          </button>
+          <span style={{ minWidth: 70, textAlign: "center" }}>
+            {page} / {totalPages}
+          </span>
+          <button
+            style={page >= totalPages ? disabledBtn : pageBtnStyle}
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+          >
+            {">"}
+          </button>
+          <button
+            style={page >= totalPages ? disabledBtn : pageBtnStyle}
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(totalPages)}
+            title="Derniere page"
+          >
+            {">>"}
+          </button>
+        </div>
+      )}
+
+      <div style={flex.rowGap(SP.m)}>
+        <span>Par page:</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          style={inputPreset.select}
+        >
+          {PAGE_SIZE_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {PAGE_SIZE_LABELS[s] ?? s}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 export function ErrorPanel({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div
       style={{
+        ...flex.center,
         height: "100%",
-        display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        color: "var(--text-muted)",
-        fontSize: 13,
-        padding: 24,
+        gap: SP.xl,
+        color: COLORS.textMuted,
+        fontSize: FONT.md,
+        padding: SP.mega,
         textAlign: "center",
       }}
     >
       <div
         style={{
+          ...flex.center,
           width: 36,
           height: 36,
           borderRadius: "50%",
           background: "var(--score-d-bg)",
           color: "var(--score-d-text)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 18,
-          fontWeight: 700,
+          fontSize: FONT.xxl,
+          fontWeight: WEIGHT.bold,
         }}
       >
         !
@@ -493,14 +634,11 @@ export function ErrorPanel({ message, onRetry }: { message: string; onRetry?: ()
         <button
           onClick={onRetry}
           style={{
-            marginTop: 4,
-            padding: "6px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface)",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            cursor: "pointer",
+            ...btn.base,
+            marginTop: SP.s,
+            padding: `${SP.m}px ${SP.xxxl}px`,
+            background: COLORS.bgSurface,
+            color: COLORS.textSecondary,
           }}
         >
           Réessayer

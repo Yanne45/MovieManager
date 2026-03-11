@@ -18,6 +18,7 @@ import { SuggestionsPage } from "./pages/SuggestionsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { DropZone } from "./components/DropZone";
 import { LoadingSpinner, ErrorPanel } from "./components/ui";
+import { COLORS, FONT, flex } from "./lib/tokens";
 import { FilterBar, type ActiveFilters, EMPTY_FILTERS } from "./components/FilterBar";
 import { ToastProvider, useToast } from "./components/Toast";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -47,6 +48,9 @@ import {
   useApplyRulesLibrary,
   useResolveInboxLink,
   useResolveInboxIgnore,
+  useBatchIgnoreInbox,
+  useBatchReopenInbox,
+  useBatchDeleteInbox,
   useCreateTag,
   useDeleteTag,
   // CRUD hooks
@@ -156,6 +160,9 @@ function AppInner() {
   const applyRules = useApplyRulesLibrary();
   const resolveInboxLink = useResolveInboxLink();
   const resolveInboxIgnore = useResolveInboxIgnore();
+  const batchIgnoreInbox = useBatchIgnoreInbox();
+  const batchReopenInbox = useBatchReopenInbox();
+  const batchDeleteInbox = useBatchDeleteInbox();
   const createTag = useCreateTag();
   const deleteTag = useDeleteTag();
   const createCollection = useCreateCollection();
@@ -370,6 +377,29 @@ function AppInner() {
     [resolveInboxIgnore, resolveInboxLink, toast]
   );
 
+  const handleBatchInbox = useCallback(
+    (ids: number[], action: "ignore" | "reopen" | "delete") => {
+      if (ids.length === 0) return;
+      const mutationMap = {
+        ignore: batchIgnoreInbox,
+        reopen: batchReopenInbox,
+        delete: batchDeleteInbox,
+      };
+      const labelMap = {
+        ignore: "ignoré(s)",
+        reopen: "réouvert(s)",
+        delete: "supprimé(s)",
+      };
+      mutationMap[action].mutate(ids, {
+        onSuccess: (count: number) =>
+          toast(`${count} élément(s) ${labelMap[action]}`, "success"),
+        onError: (err: unknown) =>
+          toast(`Erreur batch : ${err}`, "error"),
+      });
+    },
+    [batchIgnoreInbox, batchReopenInbox, batchDeleteInbox, toast]
+  );
+
   // Tags
   const handleCreateTag = useCallback(
     (name: string, color?: string) => {
@@ -530,9 +560,9 @@ function AppInner() {
           height: "100vh",
           display: "flex",
           fontFamily: "'Inter', 'Segoe UI', Roboto, sans-serif",
-          fontSize: 14,
-          color: "var(--text-main)",
-          background: "var(--bg-app)",
+          fontSize: FONT.lg,
+          color: COLORS.textMain,
+          background: COLORS.bgApp,
           overflow: "hidden",
         }}
       >
@@ -551,7 +581,7 @@ function AppInner() {
           onBrowseDatabase={handleBrowseDatabase}
         />
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, ...flex.col, overflow: "hidden" }}>
           <Topbar
             title={pageTitle}
             searchQuery={searchQuery}
@@ -709,6 +739,8 @@ function AppInner() {
                   collections={collectionsQuery.data ?? []}
                   movieIndex={Object.fromEntries(movies.map((m) => [m.id, m.title]))}
                   seriesIndex={Object.fromEntries(seriesList.map((s) => [s.id, s.title]))}
+                  tags={tags}
+                  genres={genres}
                   onCreateCollection={handleCreateCollection}
                   onDeleteCollection={handleDeleteCollection}
                 />,
@@ -720,6 +752,7 @@ function AppInner() {
                 <InboxPage
                   items={inboxItems}
                   onResolve={handleResolveInbox}
+                  onBatch={handleBatchInbox}
                 />,
                 "Chargement de l'inbox…"
               )}

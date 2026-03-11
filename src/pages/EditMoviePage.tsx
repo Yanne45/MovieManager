@@ -5,6 +5,7 @@ import { UnderlineInput, UnderlineTextarea, SectionTitle } from "../components/u
 import { SmartPoster } from "../components/SmartPoster";
 import { LightboxModal } from "../components/LightboxModal";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex, btn } from "../lib/tokens";
 
 interface EditMoviePageProps {
   movie: Movie;
@@ -86,34 +87,29 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
   };
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-surface)" }}>
+    <div style={{ height: "100%", ...flex.col, background: COLORS.bgSurface }}>
       {/* Header */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "12px 24px",
-          borderBottom: "1px solid var(--border)",
+          ...flex.rowBetween,
+          padding: `${SP.xl}px ${SP.mega}px`,
+          borderBottom: `1px solid ${COLORS.border}`,
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={flex.rowGap(SP.xl)}>
           <button
             onClick={onCancel}
             style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
+              ...btn.base,
+              padding: `${SP.s}px ${SP.xl}px`,
               background: "transparent",
-              color: "var(--text-main)",
-              fontSize: 12,
-              cursor: "pointer",
+              color: COLORS.textMain,
             }}
           >
             &larr; Retour
           </button>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>
+          <span style={{ fontSize: FONT.xl, fontWeight: WEIGHT.semi }}>
             {movie.title}
           </span>
         </div>
@@ -121,13 +117,7 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
           onClick={handleSave}
           disabled={saving}
           style={{
-            padding: "6px 20px",
-            borderRadius: 6,
-            border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: 600,
+            ...btn.primary,
             cursor: saving ? "wait" : "pointer",
             opacity: saving ? 0.6 : 1,
           }}
@@ -137,8 +127,8 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
       </div>
 
       {/* Content — 3 columns: poster+tech | fields | images */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 24 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: SP.mega }}>
+        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: SP.mega }}>
           {/* Left: Poster + technical info */}
           <div>
             <SmartPoster
@@ -152,27 +142,27 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
             />
 
             {/* Read-only metadata */}
-            <div style={{ marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
+            <div style={{ marginTop: SP.lg, fontSize: FONT.sm, color: COLORS.textMuted }}>
               {movie.tmdb_id && <div>TMDB : {movie.tmdb_id}</div>}
               {movie.imdb_id && <div>IMDb : {movie.imdb_id}</div>}
             </div>
 
             {/* Technical versions */}
             {versions.length > 0 && (
-              <div style={{ marginTop: 16 }}>
+              <div style={{ marginTop: SP.xxxl }}>
                 <SectionTitle>Technique</SectionTitle>
                 {versions.map((v) => {
                   const techLine = [v.resolution, v.video_codec, v.hdr_format, v.container?.toUpperCase()].filter(Boolean).join(" · ");
                   const audioLine = [v.audio_codec, v.audio_channels ? `${v.audio_channels}ch` : null].filter(Boolean).join(" ");
                   return (
-                    <div key={v.id} style={{ marginTop: 6, padding: 8, borderRadius: 6, background: "var(--bg-surface-alt)", fontSize: 10 }}>
-                      {v.label && <div style={{ fontWeight: 600, marginBottom: 2 }}>{v.label}</div>}
-                      {techLine && <div style={{ color: "var(--text-secondary)" }}>{techLine}</div>}
-                      {audioLine && <div style={{ color: "var(--text-muted)" }}>{audioLine}</div>}
-                      {v.video_bitrate && <div style={{ color: "var(--text-muted)" }}>Vidéo : {fmtBitrate(v.video_bitrate)}</div>}
-                      {v.audio_bitrate && <div style={{ color: "var(--text-muted)" }}>Audio : {fmtBitrate(v.audio_bitrate)}</div>}
-                      {v.duration && <div style={{ color: "var(--text-muted)" }}>Durée : {Math.round(v.duration / 60)} min</div>}
-                      {v.quality_score && <div style={{ color: "var(--color-primary)", fontWeight: 500 }}>Score : {v.quality_score}</div>}
+                    <div key={v.id} style={{ marginTop: SP.m, padding: SP.base, borderRadius: RADIUS.md, background: COLORS.bgSurfaceAlt, fontSize: FONT.xs }}>
+                      {v.label && <div style={{ fontWeight: WEIGHT.semi, marginBottom: SP.xs }}>{v.label}</div>}
+                      {techLine && <div style={{ color: COLORS.textSecondary }}>{techLine}</div>}
+                      {audioLine && <div style={{ color: COLORS.textMuted }}>{audioLine}</div>}
+                      {v.video_bitrate && <div style={{ color: COLORS.textMuted }}>Vidéo : {fmtBitrate(v.video_bitrate)}</div>}
+                      {v.audio_bitrate && <div style={{ color: COLORS.textMuted }}>Audio : {fmtBitrate(v.audio_bitrate)}</div>}
+                      {v.duration && <div style={{ color: COLORS.textMuted }}>Durée : {Math.round(v.duration / 60)} min</div>}
+                      {v.quality_score && <div style={{ color: COLORS.primary, fontWeight: WEIGHT.medium }}>Score : {v.quality_score}</div>}
                     </div>
                   );
                 })}
@@ -183,45 +173,43 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
           {/* Center: Editable fields */}
           <div>
             <SectionTitle>Informations</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.xxxl, marginTop: SP.xl }}>
               <UnderlineInput label="Titre" value={form.title} onChange={(v) => set("title", v)} />
               <UnderlineInput label="Titre original" value={form.original_title} onChange={(v) => set("original_title", v)} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.xxxl, marginTop: SP.xl }}>
               <UnderlineInput label="Titre de tri" value={form.sort_title} onChange={(v) => set("sort_title", v)} />
               <UnderlineInput label="Classification" value={form.content_rating} onChange={(v) => set("content_rating", v)} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.xxxl, marginTop: SP.xl }}>
               <UnderlineInput label="Année" value={form.year} onChange={(v) => set("year", v)} />
               <UnderlineInput label="Durée (min)" value={form.runtime} onChange={(v) => set("runtime", v)} />
             </div>
 
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: SP.xxxl }}>
               <UnderlineInput label="Tagline" value={form.tagline} onChange={(v) => set("tagline", v)} />
             </div>
 
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: SP.xxxl }}>
               <UnderlineTextarea label="Synopsis" value={form.overview} onChange={(v) => set("overview", v)} rows={5} />
             </div>
 
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: SP.xxxl }}>
               <UnderlineTextarea label="Notes" value={form.notes} onChange={(v) => set("notes", v)} rows={3} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: SP.xxxl, marginTop: SP.xxxl }}>
               <UnderlineInput label="TMDB ID" value={form.tmdb_id} onChange={(v) => set("tmdb_id", v)} />
               <UnderlineInput label="IMDB ID" value={form.imdb_id} onChange={(v) => set("imdb_id", v)} />
             </div>
 
             <label
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginTop: 16,
+                ...flex.rowGap(SP.base),
+                marginTop: SP.xxxl,
                 cursor: "pointer",
-                color: "var(--text-secondary)",
-                fontSize: 13,
+                color: COLORS.textSecondary,
+                fontSize: FONT.md,
               }}
             >
               <input
@@ -237,7 +225,7 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
           <div>
             <SectionTitle>Images ({galleryImages.length})</SectionTitle>
             {galleryImages.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+              <div style={flex.colGap(SP.m)}>
                 {galleryImages.map((img, i) => {
                   const thumbSrc = img.path_thumb ?? img.path_medium;
                   return (
@@ -247,10 +235,10 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
                       style={{
                         width: "100%",
                         aspectRatio: "16/10",
-                        borderRadius: 4,
+                        borderRadius: SP.s,
                         overflow: "hidden",
                         cursor: "pointer",
-                        border: "1px solid var(--border)",
+                        border: `1px solid ${COLORS.border}`,
                         position: "relative",
                       }}
                     >
@@ -264,15 +252,15 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
                       ) : (
                         <div style={{
                           width: "100%", height: "100%",
-                          background: "var(--bg-surface-alt)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          color: "var(--text-muted)", fontSize: 9,
+                          background: COLORS.bgSurfaceAlt,
+                          ...flex.center,
+                          color: COLORS.textMuted, fontSize: FONT.tiny,
                         }}>
                           {img.image_type}
                         </div>
                       )}
                       <div style={{
-                        position: "absolute", bottom: 2, left: 4,
+                        position: "absolute", bottom: SP.xs, left: SP.s,
                         fontSize: 8, color: "rgba(255,255,255,0.7)",
                         textTransform: "uppercase", letterSpacing: "0.05em",
                         textShadow: "0 1px 2px rgba(0,0,0,0.6)",
@@ -284,7 +272,7 @@ export function EditMoviePage({ movie, onSave, onCancel }: EditMoviePageProps) {
                 })}
               </div>
             ) : (
-              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8 }}>
+              <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginTop: SP.base }}>
                 Aucune image supplémentaire
               </div>
             )}

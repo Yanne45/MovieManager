@@ -61,6 +61,8 @@ impl Database {
             ("013_images_multi", include_str!("../../migrations/013_images_multi.sql")),
             ("014_volume_label", include_str!("../../migrations/014_volume_label.sql")),
             ("015_settings", include_str!("../../migrations/015_settings.sql")),
+            ("016_smart_collections", include_str!("../../migrations/016_smart_collections.sql")),
+            ("017_operation_tracking", include_str!("../../migrations/017_operation_tracking.sql")),
         ];
 
         sqlx::query(

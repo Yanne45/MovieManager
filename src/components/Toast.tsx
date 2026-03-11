@@ -1,4 +1,5 @@
 import { useState, useCallback, createContext, useContext, type ReactNode } from "react";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex } from "../lib/tokens";
 
 // ============================================================================
 // Toast context & provider
@@ -40,12 +41,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div
         style={{
           position: "fixed",
-          bottom: 20,
-          right: 20,
+          bottom: SP.huge,
+          right: SP.huge,
           zIndex: 10000,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
+          ...flex.colGap(SP.base),
           pointerEvents: "none",
         }}
       >
@@ -53,22 +52,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={m.id}
             style={{
-              padding: "10px 16px",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 500,
+              padding: `${SP.lg}px ${SP.xxxl}px`,
+              borderRadius: RADIUS.lg,
+              fontSize: FONT.md,
+              fontWeight: WEIGHT.medium,
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               pointerEvents: "auto",
               animation: "mm-toast-in 0.25s ease-out",
               background:
                 m.type === "success" ? "var(--score-a-bg)" :
                 m.type === "error" ? "var(--score-d-bg)" :
-                "var(--bg-surface)",
+                COLORS.bgSurface,
               color:
                 m.type === "success" ? "var(--score-a-text)" :
                 m.type === "error" ? "var(--score-d-text)" :
-                "var(--text-main)",
-              border: "1px solid var(--border)",
+                COLORS.textMain,
+              border: `1px solid ${COLORS.border}`,
               maxWidth: 360,
             }}
           >

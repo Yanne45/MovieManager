@@ -56,15 +56,17 @@ pub async fn import_nfo_files(
         errors: Vec::new(),
     };
 
+    let op_id = change_log::new_operation_id();
+
     for path_str in &paths {
         let path = std::path::Path::new(path_str);
         match nfo_parser::parse_nfo_file(path) {
             Ok(parsed) => match parsed.nfo_type.as_str() {
-                "movie" => match import_movie_nfo(pool, &parsed).await {
+                "movie" => match import_movie_nfo(pool, &parsed, Some(&op_id)).await {
                     Ok(_) => result.movies_imported += 1,
                     Err(e) => result.errors.push(format!("{}: {}", path_str, e)),
                 },
-                "tvshow" => match import_tvshow_nfo(pool, &parsed).await {
+                "tvshow" => match import_tvshow_nfo(pool, &parsed, Some(&op_id)).await {
                     Ok(_) => result.series_imported += 1,
                     Err(e) => result.errors.push(format!("{}: {}", path_str, e)),
                 },
@@ -101,7 +103,7 @@ pub async fn import_nfo_directory(
 // DB import helpers
 // ============================================================================
 
-async fn import_movie_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult) -> Result<i64, String> {
+async fn import_movie_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult, operation_id: Option<&str>) -> Result<i64, String> {
     let title = nfo.title.as_deref().ok_or("NFO has no title")?;
 
     // Check if movie already exists by TMDB ID or IMDb ID
@@ -183,7 +185,7 @@ async fn import_movie_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult) -> Resu
     }
 
     // Record in change_log
-    change_log::record_change(pool, "movie", movie.id, "title", None, Some(title), ChangeSource::Nfo)
+    change_log::record_change_op(pool, "movie", movie.id, "title", None, Some(title), ChangeSource::Nfo, operation_id)
         .await
         .ok();
 
@@ -192,7 +194,7 @@ async fn import_movie_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult) -> Resu
     Ok(movie.id)
 }
 
-async fn import_tvshow_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult) -> Result<i64, String> {
+async fn import_tvshow_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult, operation_id: Option<&str>) -> Result<i64, String> {
     let title = nfo.title.as_deref().ok_or("NFO has no title")?;
 
     // Check existing by TMDB ID
@@ -234,7 +236,7 @@ async fn import_tvshow_nfo(pool: &sqlx::SqlitePool, nfo: &NfoParseResult) -> Res
             .map_err(|e| e.to_string())?;
     }
 
-    change_log::record_change(pool, "series", series.id, "title", None, Some(title), ChangeSource::Nfo)
+    change_log::record_change_op(pool, "series", series.id, "title", None, Some(title), ChangeSource::Nfo, operation_id)
         .await
         .ok();
 

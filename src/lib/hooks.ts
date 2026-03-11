@@ -23,6 +23,8 @@ export const queryKeys = {
   rules: ["rules"] as const,
   history: (type: string, id: number) => ["history", type, id] as const,
   recentChanges: ["recentChanges"] as const,
+  operations: ["operations"] as const,
+  operationChanges: (id: string) => ["operationChanges", id] as const,
 };
 
 // ============================================================================
@@ -406,6 +408,34 @@ export function useRollbackChange() {
   });
 }
 
+export function useOperations(limit?: number) {
+  return useQuery({
+    queryKey: queryKeys.operations,
+    queryFn: () => api.getOperations(limit),
+  });
+}
+
+export function useOperationChanges(operationId: string) {
+  return useQuery({
+    queryKey: queryKeys.operationChanges(operationId),
+    queryFn: () => api.getOperationChanges(operationId),
+    enabled: !!operationId,
+  });
+}
+
+export function useRollbackOperation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.rollbackOperation,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.operations });
+      qc.invalidateQueries({ queryKey: queryKeys.recentChanges });
+      qc.invalidateQueries({ queryKey: queryKeys.movies });
+      qc.invalidateQueries({ queryKey: queryKeys.seriesList });
+    },
+  });
+}
+
 // ============================================================================
 // Update Series hook
 // ============================================================================
@@ -517,6 +547,41 @@ export function useDeleteInboxItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.deleteInboxItem,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.count });
+    },
+  });
+}
+
+// Batch operations
+
+export function useBatchIgnoreInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.batchIgnoreInbox,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.count });
+    },
+  });
+}
+
+export function useBatchReopenInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.batchReopenInbox,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
+      qc.invalidateQueries({ queryKey: queryKeysInbox.count });
+    },
+  });
+}
+
+export function useBatchDeleteInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.batchDeleteInbox,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeysInbox.allItems });
       qc.invalidateQueries({ queryKey: queryKeysInbox.count });
@@ -785,6 +850,34 @@ export function useRemoveCollectionItem() {
   });
 }
 
+// Smart collections
+
+export function useCreateSmartCollection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, description, smartRules }: { name: string; description?: string; smartRules: string }) =>
+      api.createSmartCollection(name, description, smartRules),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeysCollections.all }),
+  });
+}
+
+export function useUpdateSmartRules() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, smartRules }: { id: number; smartRules: string }) =>
+      api.updateSmartRules(id, smartRules),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeysCollections.all }),
+  });
+}
+
+export function useSmartCollectionItems(collectionId: number) {
+  return useQuery({
+    queryKey: ["smartCollectionItems", collectionId] as const,
+    queryFn: () => api.getSmartCollectionItems(collectionId),
+    enabled: collectionId > 0,
+  });
+}
+
 // ============================================================================
 // Episodes hooks
 // ============================================================================
@@ -797,6 +890,7 @@ export function useUpdateEpisode() {
     }) => api.updateEpisode(id, title, overview, runtime),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seriesList });
+      qc.invalidateQueries({ queryKey: ["seriesDetail"] });
     },
   });
 }
@@ -947,9 +1041,11 @@ export function useRecomputeAllScores() {
   return useMutation({
     mutationFn: api.recomputeAllScores,
     onSuccess: () => {
-      // Scores on movies and versions have changed — refresh both
+      // Scores on movies and versions have changed — refresh all related views
       qc.invalidateQueries({ queryKey: ["movies"] });
+      qc.invalidateQueries({ queryKey: ["movie"] });
       qc.invalidateQueries({ queryKey: ["movieVersions"] });
+      qc.invalidateQueries({ queryKey: ["dashboardStats"] });
     },
   });
 }

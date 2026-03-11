@@ -5,6 +5,7 @@ import { useImage } from "../lib/useImage";
 import { tmdbImageUrl, importLocalImage } from "../lib/api";
 import { ImagePickerModal } from "./ImagePickerModal";
 import type { ImageEntityType, ImageType } from "./ImagePickerModal";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex } from "../lib/tokens";
 
 interface SmartPosterProps {
   entityType: ImageEntityType;
@@ -105,9 +106,9 @@ export function SmartPoster({
           cursor: editable ? "pointer" : undefined,
           position: "relative",
           display: "inline-block",
-          outline: dragOver ? "2px dashed var(--color-primary)" : undefined,
+          outline: dragOver ? `2px dashed ${COLORS.primary}` : undefined,
           outlineOffset: 2,
-          borderRadius: 6,
+          borderRadius: RADIUS.md,
         }}
         title={editable ? "Modifier l'image (clic ou glisser-déposer)" : undefined}
       >
@@ -122,13 +123,13 @@ export function SmartPoster({
           <div
             style={{
               position: "absolute",
-              bottom: 4,
-              right: 4,
+              bottom: SP.s,
+              right: SP.s,
               background: "rgba(0,0,0,0.6)",
               color: "#fff",
-              borderRadius: 4,
-              fontSize: 10,
-              padding: "2px 5px",
+              borderRadius: RADIUS.sm,
+              fontSize: FONT.xs,
+              padding: `${SP.xs}px 5px`,
               pointerEvents: "none",
             }}
           >
@@ -140,15 +141,13 @@ export function SmartPoster({
             style={{
               position: "absolute",
               inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              ...flex.center,
               background: "rgba(47, 111, 219, 0.15)",
-              borderRadius: 6,
+              borderRadius: RADIUS.md,
               pointerEvents: "none",
             }}
           >
-            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-primary)" }}>
+            <span style={{ fontSize: FONT.sm, fontWeight: WEIGHT.semi, color: COLORS.primary }}>
               Déposer
             </span>
           </div>

@@ -5,6 +5,8 @@ import {
   CompletenessBar,
   SectionTitle,
   EmptyState,
+  usePagination,
+  PaginationBar,
 } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
 import type { SeriesListItem, SeriesDetail, Series, Episode } from "../lib/api";
@@ -13,6 +15,10 @@ import { useAllEntityImages } from "../lib/hooks";
 import type { ImageRecord } from "../lib/api";
 import { LightboxModal } from "../components/LightboxModal";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import {
+  COLORS, SP, FONT, WEIGHT, RADIUS, SIZES, TRANSITION,
+  flex, th, cell, panel,
+} from "../lib/tokens";
 
 // ============================================================================
 // Series List Page (table + sliding detail panel)
@@ -64,6 +70,8 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
     return result;
   }, [seriesList, searchQuery, filters]);
 
+  const pagination = usePagination(filtered, 50);
+
   const selected = useMemo(
     () => seriesList.find((s) => s.id === selectedId) ?? null,
     [seriesList, selectedId]
@@ -79,23 +87,16 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden", height: 0, minHeight: "100%" }}>
-      {/* Table */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      {/* Table + pagination */}
+      <div style={{ flex: 1, ...flex.col, overflow: "hidden" }}>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: FONT.md }}>
           <thead>
-            <tr style={{ background: "var(--bg-surface-alt)", position: "sticky", top: 0, zIndex: 1 }}>
+            <tr style={{ background: COLORS.bgSurfaceAlt, position: "sticky", top: 0, zIndex: 1 }}>
               {["", "Titre", "Années", "Statut", "Saisons", "Complétude"].map((h, i) => (
                 <th
                   key={i}
-                  style={{
-                    padding: "8px 10px",
-                    textAlign: "left",
-                    fontWeight: 500,
-                    color: "var(--text-secondary)",
-                    fontSize: 12,
-                    borderBottom: "1px solid var(--border)",
-                    whiteSpace: "nowrap",
-                  }}
+                  style={th.base}
                 >
                   {h}
                 </th>
@@ -103,7 +104,7 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
             </tr>
           </thead>
           <tbody>
-            {filtered.map((s, i) => {
+            {pagination.pageItems.map((s, i) => {
               const isSelected = s.id === selectedId;
               return (
                 <tr
@@ -112,31 +113,31 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
                   onDoubleClick={() => handleDoubleClick(s)}
                   style={{
                     cursor: "pointer",
-                    background: isSelected ? "var(--color-primary-soft)" : i % 2 === 0 ? "var(--bg-surface)" : "var(--row-odd-bg)",
+                    background: isSelected ? COLORS.primarySoft : i % 2 === 0 ? COLORS.bgSurface : "var(--row-odd-bg)",
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) e.currentTarget.style.background = "var(--row-hover-bg)";
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected)
-                      e.currentTarget.style.background = i % 2 === 0 ? "var(--bg-surface)" : "var(--row-odd-bg)";
+                      e.currentTarget.style.background = i % 2 === 0 ? COLORS.bgSurface : "var(--row-odd-bg)";
                   }}
                 >
-                  <td style={{ padding: "6px 10px", width: 42 }}>
+                  <td style={{ ...cell.base, width: 42 }}>
                     <SmartPoster entityType="series" entityId={s.id} title={s.title} tmdbPosterPath={s.poster_path} size="small" />
                   </td>
-                  <td style={{ padding: "6px 10px", fontWeight: 500 }}>{s.title}</td>
-                  <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+                  <td style={{ ...cell.base, fontWeight: WEIGHT.medium }}>{s.title}</td>
+                  <td style={{ ...cell.base, color: COLORS.textMuted }}>
                     {s.first_air_date?.slice(0, 4) || "?"}
                     {s.last_air_date ? `–${s.last_air_date.slice(0, 4)}` : "–…"}
                   </td>
-                  <td style={{ padding: "6px 10px" }}>
+                  <td style={cell.base}>
                     <StatusBadge status={s.status} />
                   </td>
-                  <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+                  <td style={{ ...cell.base, color: COLORS.textMuted }}>
                     {s.total_seasons || "—"}
                   </td>
-                  <td style={{ padding: "6px 10px" }}>
+                  <td style={cell.base}>
                     <CompletenessBar
                       owned={s.owned_episodes}
                       total={s.total_episodes || 0}
@@ -147,18 +148,22 @@ export function SeriesListPage({ seriesList, searchQuery, filters, onSelectSerie
             })}
           </tbody>
         </table>
+        </div>
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          pageSize={pagination.pageSize}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
 
       {/* Sliding detail panel */}
       <div
         style={{
-          width: 340,
-          flexShrink: 0,
-          borderLeft: "1px solid var(--border)",
-          background: "var(--bg-surface)",
-          overflowY: "auto",
-          transition: "margin-right 0.25s ease, opacity 0.2s ease",
-          marginRight: selected ? 0 : -340,
+          ...panel.container,
+          marginRight: selected ? 0 : -SIZES.detailPanelWidth,
           opacity: selected ? 1 : 0,
         }}
       >
@@ -207,10 +212,10 @@ function SeriesPreviewPanel({
   ].join("–");
 
   return (
-    <div style={{ padding: 14, textAlign: "center" }}>
+    <div style={{ padding: SP.xxl, textAlign: "center" }}>
       {/* Close chevron */}
       {onClose && (
-        <div style={{ textAlign: "right", marginBottom: 4 }}>
+        <div style={{ textAlign: "right", marginBottom: SP.s }}>
           <button
             onClick={onClose}
             title="Fermer le panneau"
@@ -218,9 +223,9 @@ function SeriesPreviewPanel({
               background: "none",
               border: "none",
               cursor: "pointer",
-              fontSize: 16,
-              color: "var(--text-muted)",
-              padding: "2px 6px",
+              fontSize: FONT.xl,
+              color: COLORS.textMuted,
+              padding: `${SP.xs}px ${SP.m}px`,
             }}
           >
             ›
@@ -229,7 +234,7 @@ function SeriesPreviewPanel({
       )}
       {/* Poster with edit icon */}
       <div
-        style={{ marginBottom: 10, display: "flex", justifyContent: "center", position: "relative", cursor: "pointer" }}
+        style={{ marginBottom: SP.lg, ...flex.center, position: "relative", cursor: "pointer" }}
         onClick={() => {
           const posterImg = allImages?.find((img) => img.image_type === "poster");
           if (posterImg) openLightbox(posterImg);
@@ -248,19 +253,17 @@ function SeriesPreviewPanel({
             title="Modifier"
             style={{
               position: "absolute",
-              top: 4,
-              right: 4,
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
+              top: SP.s,
+              right: SP.s,
+              width: SP.mega,
+              height: SP.mega,
+              borderRadius: RADIUS.full,
               border: "none",
               background: "rgba(0,0,0,0.55)",
               color: "#fff",
-              fontSize: 12,
+              fontSize: FONT.base,
               cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              ...flex.center,
               zIndex: 1,
             }}
           >
@@ -270,22 +273,22 @@ function SeriesPreviewPanel({
       </div>
 
       {/* Title */}
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{series.title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: WEIGHT.semi, marginBottom: SP.xs }}>{series.title}</h2>
       {series.original_title && series.original_title !== series.title && (
-        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>
+        <p style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginBottom: 3 }}>
           {series.original_title}
         </p>
       )}
 
       {/* Year + status */}
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>{yearRange}</span>
+      <div style={{ ...flex.center, gap: SP.m, marginBottom: SP.base }}>
+        <span style={{ fontSize: FONT.xs, color: COLORS.textSecondary }}>{yearRange}</span>
         <StatusBadge status={series.status} />
       </div>
 
       {/* Seasons & completeness */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+      <div style={{ marginBottom: SP.lg }}>
+        <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginBottom: SP.s }}>
           {series.total_seasons ? `${series.total_seasons} saison${(series.total_seasons || 0) > 1 ? "s" : ""}` : "—"}
           {" · "}
           {series.owned_episodes}/{series.total_episodes || 0} épisodes
@@ -299,9 +302,9 @@ function SeriesPreviewPanel({
 
       {/* Synopsis */}
       {series.overview && (
-        <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
           <SectionTitle>Synopsis</SectionTitle>
-          <p style={{ fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+          <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary, lineHeight: 1.5 }}>
             {series.overview.length > 500 ? series.overview.slice(0, 500) + "…" : series.overview}
           </p>
         </div>
@@ -309,16 +312,16 @@ function SeriesPreviewPanel({
 
       {/* Content rating */}
       {series.content_rating && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>
+        <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginBottom: SP.base }}>
           Classification : {series.content_rating}
         </div>
       )}
 
       {/* Image Gallery */}
       {galleryImages.length > 0 && (
-        <div style={{ marginBottom: 10, textAlign: "left" }}>
+        <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
           <SectionTitle>Images ({galleryImages.length})</SectionTitle>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+          <div style={{ display: "flex", gap: SP.s, flexWrap: "wrap", marginTop: SP.s }}>
             {galleryImages.map((img) => {
               const thumbSrc = img.path_thumb ?? img.path_medium;
               return (
@@ -331,9 +334,9 @@ function SeriesPreviewPanel({
                     borderRadius: 4,
                     overflow: "hidden",
                     cursor: "pointer",
-                    background: "var(--bg-surface-alt)",
-                    border: "1px solid var(--border)",
-                    transition: "opacity 0.15s",
+                    background: COLORS.bgSurfaceAlt,
+                    border: `1px solid ${COLORS.border}`,
+                    transition: `opacity ${TRANSITION.fast}`,
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
@@ -348,8 +351,8 @@ function SeriesPreviewPanel({
                   ) : (
                     <div style={{
                       width: "100%", height: "100%",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "var(--text-muted)", fontSize: 9,
+                      ...flex.center,
+                      color: COLORS.textMuted, fontSize: FONT.tiny,
                     }}>
                       {img.image_type}
                     </div>
@@ -362,9 +365,9 @@ function SeriesPreviewPanel({
       )}
 
       {/* IDs */}
-      <div style={{ marginBottom: 10, textAlign: "left" }}>
+      <div style={{ marginBottom: SP.lg, textAlign: "left" }}>
         <SectionTitle>Identifiants</SectionTitle>
-        <div style={{ fontSize: 9, color: "var(--text-muted)", display: "grid", gridTemplateColumns: "50px 1fr", rowGap: 2 }}>
+        <div style={{ fontSize: FONT.tiny, color: COLORS.textMuted, display: "grid", gridTemplateColumns: "50px 1fr", rowGap: SP.xs }}>
           {series.tmdb_id && (<><span>TMDB</span><span>{series.tmdb_id}</span></>)}
           {series.imdb_id && (<><span>IMDb</span><span>{series.imdb_id}</span></>)}
           {series.tvdb_id && (<><span>TVDB</span><span>{series.tvdb_id}</span></>)}
@@ -375,23 +378,23 @@ function SeriesPreviewPanel({
       {series.notes && (
         <div style={{ textAlign: "left" }}>
           <SectionTitle>Notes</SectionTitle>
-          <p style={{ fontSize: 10, color: "var(--text-secondary)" }}>{series.notes}</p>
+          <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary }}>{series.notes}</p>
         </div>
       )}
 
       {/* View detail button */}
       {onViewDetail && (
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: SP.xxl }}>
           <button
             onClick={onViewDetail}
             style={{
-              padding: "6px 16px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--bg-surface-alt)",
-              color: "var(--text-main)",
-              fontSize: 11,
-              fontWeight: 500,
+              padding: `${SP.m}px ${SP.xxxl}px`,
+              borderRadius: RADIUS.md,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.bgSurfaceAlt,
+              color: COLORS.textMain,
+              fontSize: FONT.sm,
+              fontWeight: WEIGHT.medium,
               cursor: "pointer",
             }}
           >
@@ -430,16 +433,15 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
   const currentEpisode = currentSeason?.episodes.find((e) => e.id === selectedEpisodeId) || null;
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ flex: 1, ...flex.col, overflow: "hidden" }}>
       {/* Header */}
       <div
         style={{
-          padding: "12px 16px",
-          borderBottom: "1px solid var(--border)",
-          background: "var(--bg-surface)",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
+          padding: `${SP.xl}px ${SP.xxxl}px`,
+          borderBottom: `1px solid ${COLORS.border}`,
+          background: COLORS.bgSurface,
+          ...flex.row,
+          gap: SP.xxl,
         }}
       >
         <button
@@ -449,23 +451,23 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
             border: "none",
             cursor: "pointer",
             fontSize: 18,
-            color: "var(--text-secondary)",
+            color: COLORS.textSecondary,
           }}
         >
           ←
         </button>
         <SmartPoster entityType="series" entityId={detail.id} title={detail.title} tmdbPosterPath={detail.poster_path} size="medium" />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600 }}>{detail.title}</h2>
+          <div style={{ ...flex.rowGap(SP.base) }}>
+            <h2 style={{ fontSize: 17, fontWeight: WEIGHT.semi }}>{detail.title}</h2>
             <StatusBadge status={detail.status} />
           </div>
           {detail.overview && (
             <p
               style={{
-                fontSize: 12,
-                color: "var(--text-secondary)",
-                marginTop: 4,
+                fontSize: FONT.base,
+                color: COLORS.textSecondary,
+                marginTop: SP.s,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -475,7 +477,7 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
               {detail.overview}
             </p>
           )}
-          <div style={{ marginTop: 6 }}>
+          <div style={{ marginTop: SP.m }}>
             <CompletenessBar
               owned={detail.owned_episodes}
               total={detail.total_episode_count}
@@ -488,13 +490,13 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
             onClick={onEdit}
             title="Modifier la série"
             style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
+              padding: `${SP.s}px ${SP.xl}px`,
+              borderRadius: RADIUS.md,
+              border: `1px solid ${COLORS.border}`,
               background: "transparent",
-              color: "var(--text-main)",
-              fontSize: 11,
-              fontWeight: 500,
+              color: COLORS.textMain,
+              fontSize: FONT.sm,
+              fontWeight: WEIGHT.medium,
               cursor: "pointer",
               flexShrink: 0,
             }}
@@ -511,9 +513,9 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
           style={{
             width: 180,
             flexShrink: 0,
-            borderRight: "1px solid var(--border)",
+            borderRight: `1px solid ${COLORS.border}`,
             overflowY: "auto",
-            background: "var(--bg-surface)",
+            background: COLORS.bgSurface,
           }}
         >
           {detail.seasons.map((season, idx) => {
@@ -524,7 +526,7 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
                 : 0;
             const icon = pct === 100 ? "●" : pct > 0 ? "◐" : "○";
             const iconColor =
-              pct === 100 ? "var(--success)" : pct > 0 ? "var(--warning)" : "var(--error)";
+              pct === 100 ? COLORS.success : pct > 0 ? COLORS.warning : COLORS.error;
 
             return (
               <button
@@ -534,28 +536,27 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
                   setSelectedEpisodeId(null);
                 }}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
+                  ...flex.row,
                   width: "100%",
-                  padding: "10px 12px",
-                  fontSize: 13,
-                  fontWeight: active ? 600 : 400,
-                  color: active ? "var(--color-primary)" : "var(--text-main)",
-                  background: active ? "var(--color-primary-soft)" : "transparent",
+                  padding: `${SP.lg}px ${SP.xl}px`,
+                  fontSize: FONT.md,
+                  fontWeight: active ? WEIGHT.semi : WEIGHT.normal,
+                  color: active ? COLORS.primary : COLORS.textMain,
+                  background: active ? COLORS.primarySoft : "transparent",
                   border: "none",
-                  borderBottom: "1px solid var(--border)",
+                  borderBottom: `1px solid ${COLORS.border}`,
                   cursor: "pointer",
                   textAlign: "left",
-                  gap: 8,
+                  gap: SP.base,
                 }}
               >
-                <span style={{ color: iconColor, fontSize: 10 }}>{icon}</span>
+                <span style={{ color: iconColor, fontSize: FONT.xs }}>{icon}</span>
                 <span style={{ flex: 1 }}>
                   {season.season_number === 0
                     ? "Specials"
                     : `S${String(season.season_number).padStart(2, "0")}`}
                 </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                <span style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
                   {season.owned_count}/{season.episodes.length}
                 </span>
               </button>
@@ -571,12 +572,12 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
             <>
               <div
                 style={{
-                  padding: "8px 12px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--text-muted)",
-                  background: "var(--bg-surface-alt)",
-                  borderBottom: "1px solid var(--border)",
+                  padding: `${SP.base}px ${SP.xl}px`,
+                  fontSize: FONT.base,
+                  fontWeight: WEIGHT.semi,
+                  color: COLORS.textMuted,
+                  background: COLORS.bgSurfaceAlt,
+                  borderBottom: `1px solid ${COLORS.border}`,
                 }}
               >
                 {currentSeason.season_number === 0
@@ -585,19 +586,16 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
                 {" — "}
                 {currentSeason.owned_count}/{currentSeason.episodes.length} épisodes
               </div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: FONT.md }}>
                 <thead>
-                  <tr style={{ background: "var(--bg-surface-alt)" }}>
+                  <tr style={{ background: COLORS.bgSurfaceAlt }}>
                     {["N°", ...(hasAbsolute ? ["Abs."] : []), "Titre", "Durée", "Fichier", "Score"].map((h, i) => (
                       <th
                         key={i}
                         style={{
-                          padding: "6px 10px",
-                          textAlign: "left",
-                          fontWeight: 500,
-                          color: "var(--text-secondary)",
-                          fontSize: 11,
-                          borderBottom: "1px solid var(--border)",
+                          ...th.base,
+                          fontSize: FONT.sm,
+                          padding: `${SP.m}px ${SP.lg}px`,
                         }}
                       >
                         {h}
@@ -615,8 +613,8 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
                         style={{
                           cursor: "pointer",
                           background: isSelected
-                            ? "var(--color-primary-soft)"
-                            : "var(--bg-surface)",
+                            ? COLORS.primarySoft
+                            : COLORS.bgSurface,
                           opacity: ep.has_file ? 1 : 0.5,
                         }}
                         onMouseEnter={(e) => {
@@ -624,29 +622,29 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected)
-                            e.currentTarget.style.background = "var(--bg-surface)";
+                            e.currentTarget.style.background = COLORS.bgSurface;
                         }}
                       >
-                        <td style={{ padding: "6px 10px", width: 40, color: "var(--text-muted)" }}>
+                        <td style={{ ...cell.base, width: 40, color: COLORS.textMuted }}>
                           {String(ep.episode_number).padStart(2, "0")}
                         </td>
                         {hasAbsolute && (
-                          <td style={{ padding: "6px 10px", width: 40, color: "var(--text-muted)", fontSize: 11 }}>
+                          <td style={{ ...cell.base, width: 40, color: COLORS.textMuted, fontSize: FONT.sm }}>
                             {ep.absolute_number != null ? `#${ep.absolute_number}` : "—"}
                           </td>
                         )}
-                        <td style={{ padding: "6px 10px", fontWeight: 500 }}>
+                        <td style={{ ...cell.base, fontWeight: WEIGHT.medium }}>
                           {ep.title || `Épisode ${ep.episode_number}`}
                         </td>
-                        <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>
+                        <td style={{ ...cell.base, color: COLORS.textMuted }}>
                           {ep.runtime ? `${ep.runtime} min` : "—"}
                         </td>
-                        <td style={{ padding: "6px 10px" }}>
-                          <span style={{ color: ep.has_file ? "var(--success)" : "var(--error)" }}>
+                        <td style={cell.base}>
+                          <span style={{ color: ep.has_file ? COLORS.success : COLORS.error }}>
                             {ep.has_file ? "✓" : "✗"}
                           </span>
                         </td>
-                        <td style={{ padding: "6px 10px" }}>
+                        <td style={cell.base}>
                           {ep.has_file ? <ScoreBadge score="B" /> : null}
                         </td>
                       </tr>
@@ -664,10 +662,10 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
           style={{
             width: 300,
             flexShrink: 0,
-            borderLeft: "1px solid var(--border)",
-            background: "var(--bg-surface)",
+            borderLeft: `1px solid ${COLORS.border}`,
+            background: COLORS.bgSurface,
             overflowY: "auto",
-            padding: 16,
+            padding: SP.xxxl,
           }}
         >
           {currentEpisode ? (
@@ -684,18 +682,17 @@ export function SeriesDetailPage({ detail, onBack, onEdit }: SeriesDetailPagePro
 function EpisodeDetailPanel({ episode }: { episode: Episode }) {
   return (
     <>
-      <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+      <h3 style={{ fontSize: FONT.lg, fontWeight: WEIGHT.semi, marginBottom: SP.s }}>
         E{String(episode.episode_number).padStart(2, "0")} — {episode.title || "Sans titre"}
       </h3>
 
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 12,
-          fontSize: 12,
-          color: "var(--text-muted)",
+          ...flex.row,
+          gap: SP.base,
+          marginBottom: SP.xl,
+          fontSize: FONT.base,
+          color: COLORS.textMuted,
         }}
       >
         {episode.absolute_number != null && (
@@ -706,8 +703,8 @@ function EpisodeDetailPanel({ episode }: { episode: Episode }) {
         <span
           style={{
             marginLeft: "auto",
-            color: episode.has_file ? "var(--success)" : "var(--error)",
-            fontWeight: 600,
+            color: episode.has_file ? COLORS.success : COLORS.error,
+            fontWeight: WEIGHT.semi,
           }}
         >
           {episode.has_file ? "Fichier présent" : "Fichier manquant"}
@@ -715,9 +712,9 @@ function EpisodeDetailPanel({ episode }: { episode: Episode }) {
       </div>
 
       {episode.overview && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: SP.xxl }}>
           <SectionTitle>Synopsis</SectionTitle>
-          <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55 }}>
+          <p style={{ fontSize: FONT.base, color: COLORS.textSecondary, lineHeight: 1.55 }}>
             {episode.overview}
           </p>
         </div>
@@ -726,7 +723,7 @@ function EpisodeDetailPanel({ episode }: { episode: Episode }) {
       {episode.tmdb_id && (
         <div>
           <SectionTitle>Identifiants</SectionTitle>
-          <p style={{ fontSize: 11, color: "var(--text-muted)" }}>TMDB: {episode.tmdb_id}</p>
+          <p style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>TMDB: {episode.tmdb_id}</p>
         </div>
       )}
     </>

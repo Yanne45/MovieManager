@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex } from "../lib/tokens";
 
 // ============================================================================
 // Filter types
@@ -49,17 +50,16 @@ export function FilterBar({ filters, onChange, genres, libraries, showCompletene
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "6px 16px",
-        borderBottom: "1px solid var(--border)",
-        background: "var(--bg-surface)",
-        fontSize: 12,
+        ...flex.row,
+        gap: SP.m,
+        padding: `${SP.m}px ${SP.xxxl}px`,
+        borderBottom: `1px solid ${COLORS.border}`,
+        background: COLORS.bgSurface,
+        fontSize: FONT.base,
         flexWrap: "wrap",
       }}
     >
-      <span style={{ color: "var(--text-muted)", fontWeight: 500, marginRight: 4 }}>
+      <span style={{ color: COLORS.textMuted, fontWeight: WEIGHT.medium, marginRight: SP.s }}>
         Filtres
       </span>
 
@@ -133,14 +133,14 @@ export function FilterBar({ filters, onChange, genres, libraries, showCompletene
         <button
           onClick={clear}
           style={{
-            marginLeft: 4,
-            padding: "3px 10px",
-            borderRadius: 999,
+            marginLeft: SP.s,
+            padding: `3px ${SP.lg}px`,
+            borderRadius: RADIUS.full,
             border: "none",
-            background: "var(--color-primary-soft)",
-            color: "var(--color-primary)",
-            fontSize: 11,
-            fontWeight: 600,
+            background: COLORS.primarySoft,
+            color: COLORS.primary,
+            fontSize: FONT.sm,
+            fontWeight: WEIGHT.semi,
             cursor: "pointer",
           }}
         >
@@ -185,19 +185,19 @@ function FilterDropdown({
       <button
         onClick={() => setOpen(!open)}
         style={{
-          padding: "3px 10px",
-          borderRadius: 6,
-          border: value ? "1px solid var(--color-primary)" : "1px solid var(--border)",
-          background: value ? "var(--color-primary-soft)" : "transparent",
-          color: value ? "var(--color-primary)" : "var(--text-secondary)",
-          fontSize: 11,
-          fontWeight: value ? 600 : 400,
+          padding: `3px ${SP.lg}px`,
+          borderRadius: RADIUS.md,
+          border: value ? `1px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`,
+          background: value ? COLORS.primarySoft : "transparent",
+          color: value ? COLORS.primary : COLORS.textSecondary,
+          fontSize: FONT.sm,
+          fontWeight: value ? WEIGHT.semi : WEIGHT.normal,
           cursor: "pointer",
           whiteSpace: "nowrap",
         }}
       >
         {activeOption ? `${label}: ${activeOption.label}` : label}
-        <span style={{ marginLeft: 4, fontSize: 9 }}>▾</span>
+        <span style={{ marginLeft: SP.s, fontSize: FONT.tiny }}>▾</span>
       </button>
 
       {open && (
@@ -206,16 +206,16 @@ function FilterDropdown({
             position: "absolute",
             top: "100%",
             left: 0,
-            marginTop: 4,
+            marginTop: SP.s,
             minWidth: 160,
             maxHeight: 240,
             overflowY: "auto",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
+            background: COLORS.bgSurface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: RADIUS.lg,
             boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
             zIndex: 100,
-            padding: 4,
+            padding: SP.s,
           }}
         >
           {/* Clear option */}
@@ -248,13 +248,13 @@ function DropdownItem({ label, active, onClick }: { label: string; active: boole
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        padding: "5px 10px",
-        borderRadius: 4,
-        fontSize: 12,
+        padding: `5px ${SP.lg}px`,
+        borderRadius: RADIUS.sm,
+        fontSize: FONT.base,
         cursor: "pointer",
-        fontWeight: active ? 600 : 400,
-        color: active ? "var(--color-primary)" : "var(--text-main)",
-        background: hover ? "var(--bg-surface-alt)" : "transparent",
+        fontWeight: active ? WEIGHT.semi : WEIGHT.normal,
+        color: active ? COLORS.primary : COLORS.textMain,
+        background: hover ? COLORS.bgSurfaceAlt : "transparent",
       }}
     >
       {label}
@@ -297,19 +297,19 @@ function YearRangeFilter({
       <button
         onClick={() => setOpen(!open)}
         style={{
-          padding: "3px 10px",
-          borderRadius: 6,
-          border: hasValue ? "1px solid var(--color-primary)" : "1px solid var(--border)",
-          background: hasValue ? "var(--color-primary-soft)" : "transparent",
-          color: hasValue ? "var(--color-primary)" : "var(--text-secondary)",
-          fontSize: 11,
-          fontWeight: hasValue ? 600 : 400,
+          padding: `3px ${SP.lg}px`,
+          borderRadius: RADIUS.md,
+          border: hasValue ? `1px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`,
+          background: hasValue ? COLORS.primarySoft : "transparent",
+          color: hasValue ? COLORS.primary : COLORS.textSecondary,
+          fontSize: FONT.sm,
+          fontWeight: hasValue ? WEIGHT.semi : WEIGHT.normal,
           cursor: "pointer",
           whiteSpace: "nowrap",
         }}
       >
         {labelText}
-        <span style={{ marginLeft: 4, fontSize: 9 }}>▾</span>
+        <span style={{ marginLeft: SP.s, fontSize: FONT.tiny }}>▾</span>
       </button>
 
       {open && (
@@ -318,16 +318,14 @@ function YearRangeFilter({
             position: "absolute",
             top: "100%",
             left: 0,
-            marginTop: 4,
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
+            marginTop: SP.s,
+            background: COLORS.bgSurface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: RADIUS.lg,
             boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
             zIndex: 100,
-            padding: 12,
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
+            padding: SP.xl,
+            ...flex.rowGap(SP.base),
           }}
         >
           <input
@@ -337,15 +335,15 @@ function YearRangeFilter({
             onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null, yearTo)}
             style={{
               width: 70,
-              padding: "4px 6px",
-              borderRadius: 4,
-              border: "1px solid var(--border)",
-              background: "var(--bg-surface-alt)",
-              fontSize: 12,
-              color: "var(--text-main)",
+              padding: `${SP.s}px ${SP.m}px`,
+              borderRadius: RADIUS.sm,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.bgSurfaceAlt,
+              fontSize: FONT.base,
+              color: COLORS.textMain,
             }}
           />
-          <span style={{ color: "var(--text-muted)", fontSize: 11 }}>à</span>
+          <span style={{ color: COLORS.textMuted, fontSize: FONT.sm }}>à</span>
           <input
             type="number"
             placeholder="À"
@@ -353,24 +351,24 @@ function YearRangeFilter({
             onChange={(e) => onChange(yearFrom, e.target.value ? parseInt(e.target.value) : null)}
             style={{
               width: 70,
-              padding: "4px 6px",
-              borderRadius: 4,
-              border: "1px solid var(--border)",
-              background: "var(--bg-surface-alt)",
-              fontSize: 12,
-              color: "var(--text-main)",
+              padding: `${SP.s}px ${SP.m}px`,
+              borderRadius: RADIUS.sm,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.bgSurfaceAlt,
+              fontSize: FONT.base,
+              color: COLORS.textMain,
             }}
           />
           {hasValue && (
             <button
               onClick={() => { onChange(null, null); setOpen(false); }}
               style={{
-                padding: "3px 8px",
-                borderRadius: 4,
+                padding: `3px ${SP.base}px`,
+                borderRadius: RADIUS.sm,
                 border: "none",
                 background: "var(--score-d-bg)",
                 color: "var(--score-d-text)",
-                fontSize: 10,
+                fontSize: FONT.xs,
                 cursor: "pointer",
               }}
             >

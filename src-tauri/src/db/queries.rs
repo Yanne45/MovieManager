@@ -726,6 +726,36 @@ pub async fn get_collections_with_counts(pool: &SqlitePool) -> Result<Vec<Collec
     .await?)
 }
 
+pub async fn create_smart_collection(
+    pool: &SqlitePool,
+    name: &str,
+    description: Option<&str>,
+    smart_rules: &str,
+) -> Result<Collection> {
+    Ok(sqlx::query_as::<_, Collection>(
+        "INSERT INTO collections (name, description, is_smart, smart_rules) VALUES (?, ?, 1, ?) RETURNING *"
+    )
+    .bind(name)
+    .bind(description)
+    .bind(smart_rules)
+    .fetch_one(pool)
+    .await?)
+}
+
+pub async fn update_smart_rules(
+    pool: &SqlitePool,
+    id: i64,
+    smart_rules: &str,
+) -> Result<Option<Collection>> {
+    Ok(sqlx::query_as::<_, Collection>(
+        "UPDATE collections SET smart_rules = ?, updated_at = datetime('now') WHERE id = ? AND is_smart = 1 RETURNING *"
+    )
+    .bind(smart_rules)
+    .bind(id)
+    .fetch_optional(pool)
+    .await?)
+}
+
 // ============================================================================
 // Genres CRUD
 // ============================================================================

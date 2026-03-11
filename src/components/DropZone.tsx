@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import type { DragEvent, ReactNode } from "react";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex } from "../lib/tokens";
 
 interface DropZoneProps {
   children: ReactNode;
@@ -93,29 +94,27 @@ export function DropZone({ children, onDrop, disabled }: DropZoneProps) {
             position: "absolute",
             inset: 0,
             zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            ...flex.center,
             background: "rgba(47, 111, 219, 0.08)",
-            border: "3px dashed var(--color-primary)",
-            borderRadius: 12,
+            border: `3px dashed ${COLORS.primary}`,
+            borderRadius: RADIUS.xl,
             pointerEvents: "none",
           }}
         >
           <div
             style={{
-              background: "var(--bg-surface)",
-              padding: "24px 40px",
-              borderRadius: 12,
+              background: COLORS.bgSurface,
+              padding: `${SP.mega}px 40px`,
+              borderRadius: RADIUS.xl,
               boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
               textAlign: "center",
             }}
           >
             <p
               style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: "var(--color-primary)",
+                fontSize: FONT.xxl,
+                fontWeight: WEIGHT.semi,
+                color: COLORS.primary,
                 margin: 0,
               }}
             >
@@ -123,9 +122,9 @@ export function DropZone({ children, onDrop, disabled }: DropZoneProps) {
             </p>
             <p
               style={{
-                fontSize: 13,
-                color: "var(--text-muted)",
-                marginTop: 4,
+                fontSize: FONT.md,
+                color: COLORS.textMuted,
+                marginTop: SP.s,
               }}
             >
               Fichiers vidéo ou dossiers

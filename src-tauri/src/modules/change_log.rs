@@ -1,13 +1,14 @@
 //! Change log module (audit trail)
 //!
 //! Records every modification to tracked entities:
-//! - entity_type / entity_id / field / old_value / new_value / source / timestamp
-//! - Enables rollback, debugging, and confidence in auto-matching
-//! - Sources: scan, tmdb, manual, rule
+//! - entity_type / entity_id / field / old_value / new_value / source / timestamp / operation_id
+//! - Enables rollback (single or grouped by operation), debugging, and confidence in auto-matching
+//! - Sources: scan, tmdb, manual, rule, import, nfo
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 // ============================================================================
 // Types
@@ -23,6 +24,7 @@ pub struct ChangeLogEntry {
     pub new_value: Option<String>,
     pub source: String,
     pub timestamp: String,
+    pub operation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,11 +50,30 @@ impl ChangeSource {
     }
 }
 
+/// Summary of a grouped operation
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct OperationSummary {
+    pub operation_id: String,
+    pub source: String,
+    pub timestamp: String, // earliest timestamp
+    pub change_count: i64,
+    pub entity_count: i64,
+}
+
+// ============================================================================
+// Operation ID generation
+// ============================================================================
+
+/// Generate a new unique operation ID (UUID v4)
+pub fn new_operation_id() -> String {
+    Uuid::new_v4().to_string()
+}
+
 // ============================================================================
 // Recording changes
 // ============================================================================
 
-/// Record a single field change
+/// Record a single field change (with optional operation_id)
 pub async fn record_change(
     pool: &SqlitePool,
     entity_type: &str,
@@ -62,14 +83,28 @@ pub async fn record_change(
     new_value: Option<&str>,
     source: ChangeSource,
 ) -> Result<()> {
+    record_change_op(pool, entity_type, entity_id, field, old_value, new_value, source, None).await
+}
+
+/// Record a single field change with an operation_id
+pub async fn record_change_op(
+    pool: &SqlitePool,
+    entity_type: &str,
+    entity_id: i64,
+    field: &str,
+    old_value: Option<&str>,
+    new_value: Option<&str>,
+    source: ChangeSource,
+    operation_id: Option<&str>,
+) -> Result<()> {
     // Don't log if values are identical
     if old_value == new_value {
         return Ok(());
     }
 
     sqlx::query(
-        "INSERT INTO change_log (entity_type, entity_id, field, old_value, new_value, source)
-         VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO change_log (entity_type, entity_id, field, old_value, new_value, source, operation_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(entity_type)
     .bind(entity_id)
@@ -77,6 +112,7 @@ pub async fn record_change(
     .bind(old_value)
     .bind(new_value)
     .bind(source.as_str())
+    .bind(operation_id)
     .execute(pool)
     .await?;
 
@@ -192,6 +228,72 @@ pub async fn get_changes_by_source(
     Ok(rows)
 }
 
+// ============================================================================
+// Operation queries
+// ============================================================================
+
+/// List recent operations (grouped by operation_id)
+pub async fn get_operations(
+    pool: &SqlitePool,
+    limit: i64,
+) -> Result<Vec<OperationSummary>> {
+    let rows = sqlx::query_as::<_, OperationSummary>(
+        "SELECT operation_id, source,
+                MIN(timestamp) AS timestamp,
+                COUNT(*) AS change_count,
+                COUNT(DISTINCT entity_type || ':' || entity_id) AS entity_count
+         FROM change_log
+         WHERE operation_id IS NOT NULL
+         GROUP BY operation_id
+         ORDER BY MIN(timestamp) DESC
+         LIMIT ?"
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Get all changes for a given operation
+pub async fn get_operation_changes(
+    pool: &SqlitePool,
+    operation_id: &str,
+) -> Result<Vec<ChangeLogEntry>> {
+    let rows = sqlx::query_as::<_, ChangeLogEntry>(
+        "SELECT * FROM change_log WHERE operation_id = ? ORDER BY id ASC"
+    )
+    .bind(operation_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+// ============================================================================
+// Rollback
+// ============================================================================
+
+fn entity_table(entity_type: &str) -> Result<&str> {
+    match entity_type {
+        "movie" => Ok("movies"),
+        "series" => Ok("series"),
+        "season" => Ok("seasons"),
+        "episode" => Ok("episodes"),
+        "person" => Ok("people"),
+        "studio" => Ok("studios"),
+        _ => Err(anyhow::anyhow!("Unknown entity type: {}", entity_type)),
+    }
+}
+
+fn validate_field(field: &str) -> Result<()> {
+    if !field.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        Err(anyhow::anyhow!("Invalid field name: {}", field))
+    } else {
+        Ok(())
+    }
+}
+
 /// Rollback a single change (restore old_value)
 pub async fn rollback_change(
     pool: &SqlitePool,
@@ -206,21 +308,8 @@ pub async fn rollback_change(
 
     let Some(entry) = entry else { return Ok(None) };
 
-    // Build dynamic UPDATE
-    let table = match entry.entity_type.as_str() {
-        "movie" => "movies",
-        "series" => "series",
-        "season" => "seasons",
-        "episode" => "episodes",
-        "person" => "people",
-        "studio" => "studios",
-        _ => return Err(anyhow::anyhow!("Unknown entity type: {}", entry.entity_type)),
-    };
-
-    // Validate field name — only allow alphanumeric + underscore (prevent SQL injection)
-    if !entry.field.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return Err(anyhow::anyhow!("Invalid field name: {}", entry.field));
-    }
+    let table = entity_table(&entry.entity_type)?;
+    validate_field(&entry.field)?;
 
     let query = format!(
         "UPDATE {} SET {} = ?, updated_at = datetime('now') WHERE id = ?",
@@ -245,6 +334,77 @@ pub async fn rollback_change(
     ).await?;
 
     Ok(Some(entry))
+}
+
+/// Rollback all changes in an operation (in reverse order)
+/// Returns the number of changes rolled back
+pub async fn rollback_operation(
+    pool: &SqlitePool,
+    operation_id: &str,
+) -> Result<i64> {
+    let entries = sqlx::query_as::<_, ChangeLogEntry>(
+        "SELECT * FROM change_log WHERE operation_id = ? ORDER BY id DESC"
+    )
+    .bind(operation_id)
+    .fetch_all(pool)
+    .await?;
+
+    if entries.is_empty() {
+        return Err(anyhow::anyhow!("No changes found for operation {}", operation_id));
+    }
+
+    let rollback_op_id = new_operation_id();
+    let mut count: i64 = 0;
+
+    for entry in &entries {
+        let table = match entity_table(&entry.entity_type) {
+            Ok(t) => t,
+            Err(e) => {
+                log::warn!("Rollback: skipping entry {} — {}", entry.id, e);
+                continue;
+            }
+        };
+        if let Err(e) = validate_field(&entry.field) {
+            log::warn!("Rollback: skipping entry {} — {}", entry.id, e);
+            continue;
+        }
+
+        let query = format!(
+            "UPDATE {} SET {} = ?, updated_at = datetime('now') WHERE id = ?",
+            table, entry.field
+        );
+
+        let result = sqlx::query(&query)
+            .bind(&entry.old_value)
+            .bind(entry.entity_id)
+            .execute(pool)
+            .await;
+
+        match result {
+            Ok(_) => {
+                // Record the rollback change with a new operation_id
+                record_change_op(
+                    pool,
+                    &entry.entity_type,
+                    entry.entity_id,
+                    &entry.field,
+                    entry.new_value.as_deref(),
+                    entry.old_value.as_deref(),
+                    ChangeSource::Manual,
+                    Some(&rollback_op_id),
+                ).await?;
+                count += 1;
+            }
+            Err(e) => {
+                log::warn!(
+                    "Rollback: failed to revert entry {} ({}.{} on id {}): {}",
+                    entry.id, entry.entity_type, entry.field, entry.entity_id, e
+                );
+            }
+        }
+    }
+
+    Ok(count)
 }
 
 /// Count changes for an entity (useful for UI badges)

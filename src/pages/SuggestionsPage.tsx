@@ -2,6 +2,7 @@ import { SectionTitle, EmptyState, LoadingSpinner } from "../components/ui";
 import { SmartPoster } from "../components/SmartPoster";
 import { useRecentlyAddedMovies, useIncompleteSeries, useWishlistMovies } from "../lib/hooks";
 import type { SuggestionItem, IncompleteSeriesRow } from "../lib/api";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, TRANSITION, flex } from "../lib/tokens";
 
 // ============================================================================
 // Suggestions Page
@@ -23,7 +24,7 @@ export function SuggestionsPage() {
   }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+    <div style={{ flex: 1, overflowY: "auto", padding: `${SP.xxxl}px ${SP.mega}px` }}>
 
       {/* Recently added */}
       {recent && recent.length > 0 && (
@@ -35,7 +36,7 @@ export function SuggestionsPage() {
       {/* Incomplete series */}
       {incomplete && incomplete.length > 0 && (
         <SuggestionSection title="Séries incomplètes" subtitle="Épisodes manquants à compléter">
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={flex.colGap(SP.m)}>
             {incomplete.map((s) => (
               <IncompleteSeriesCard key={s.id} series={s} />
             ))}
@@ -69,7 +70,7 @@ function SuggestionSection({
   return (
     <div style={{ marginBottom: 28 }}>
       <SectionTitle>{title}</SectionTitle>
-      <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, marginTop: -4 }}>
+      <p style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginBottom: SP.xl, marginTop: -SP.s }}>
         {subtitle}
       </p>
       {children}
@@ -79,7 +80,7 @@ function SuggestionSection({
 
 function PosterGrid({ items, entityType }: { items: SuggestionItem[]; entityType: string }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: SP.xl }}>
       {items.map((item) => (
         <div key={item.id} style={{ width: 90, textAlign: "center" }}>
           <SmartPoster
@@ -91,9 +92,9 @@ function PosterGrid({ items, entityType }: { items: SuggestionItem[]; entityType
           />
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 500,
-              marginTop: 4,
+              fontSize: FONT.sm,
+              fontWeight: WEIGHT.medium,
+              marginTop: SP.s,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -102,7 +103,7 @@ function PosterGrid({ items, entityType }: { items: SuggestionItem[]; entityType
             {item.title}
           </div>
           {item.year && (
-            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{item.year}</div>
+            <div style={{ fontSize: FONT.xs, color: COLORS.textMuted }}>{item.year}</div>
           )}
         </div>
       ))}
@@ -118,13 +119,11 @@ function IncompleteSeriesCard({ series }: { series: IncompleteSeriesRow }) {
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "8px 12px",
-        borderRadius: 8,
-        border: "1px solid var(--border)",
-        background: "var(--bg-surface)",
+        ...flex.rowGap(SP.xl),
+        padding: `${SP.base}px ${SP.xl}px`,
+        borderRadius: RADIUS.lg,
+        border: `1px solid ${COLORS.border}`,
+        background: COLORS.bgSurface,
       }}
     >
       <div style={{ width: 36, flexShrink: 0 }}>
@@ -137,10 +136,10 @@ function IncompleteSeriesCard({ series }: { series: IncompleteSeriesRow }) {
         />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: FONT.md, fontWeight: WEIGHT.semi, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {series.title}
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
           {series.owned_episodes}/{series.total_episodes ?? "?"} épisodes — {series.missing_count} manquant{series.missing_count > 1 ? "s" : ""}
         </div>
       </div>
@@ -149,9 +148,9 @@ function IncompleteSeriesCard({ series }: { series: IncompleteSeriesRow }) {
       <div style={{ width: 80, flexShrink: 0 }}>
         <div
           style={{
-            height: 6,
-            borderRadius: 3,
-            background: "var(--bg-surface-alt)",
+            height: SP.m,
+            borderRadius: RADIUS.sm,
+            background: COLORS.bgSurfaceAlt,
             overflow: "hidden",
           }}
         >
@@ -159,13 +158,13 @@ function IncompleteSeriesCard({ series }: { series: IncompleteSeriesRow }) {
             style={{
               height: "100%",
               width: `${pct}%`,
-              background: pct === 100 ? "var(--success)" : "var(--warning)",
-              borderRadius: 3,
-              transition: "width 0.3s",
+              background: pct === 100 ? COLORS.success : COLORS.warning,
+              borderRadius: RADIUS.sm,
+              transition: `width ${TRANSITION.slow}`,
             }}
           />
         </div>
-        <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "right", marginTop: 2 }}>
+        <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, textAlign: "right", marginTop: SP.xs }}>
           {pct}%
         </div>
       </div>

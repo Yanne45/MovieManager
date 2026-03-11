@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { ImageRecord } from "../lib/api";
+import { FONT, WEIGHT, RADIUS, SP, TRANSITION, flex } from "../lib/tokens";
 
 interface LightboxModalProps {
   images: ImageRecord[];
@@ -57,9 +58,7 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
         inset: 0,
         zIndex: 2000,
         background: "rgba(0, 0, 0, 0.92)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        ...flex.center,
       }}
       onClick={onClose}
     >
@@ -68,19 +67,17 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
         onClick={onClose}
         style={{
           position: "absolute",
-          top: 16,
-          right: 16,
+          top: SP.xxxl,
+          right: SP.xxxl,
           background: "rgba(255,255,255,0.15)",
           border: "none",
           color: "#fff",
           fontSize: 24,
           width: 40,
           height: 40,
-          borderRadius: "50%",
+          borderRadius: RADIUS.full,
           cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          ...flex.center,
           zIndex: 2001,
         }}
         title="Fermer (Echap)"
@@ -97,8 +94,8 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
             left: "50%",
             transform: "translateX(-50%)",
             color: "rgba(255,255,255,0.7)",
-            fontSize: 14,
-            fontWeight: 500,
+            fontSize: FONT.lg,
+            fontWeight: WEIGHT.medium,
             zIndex: 2001,
             userSelect: "none",
           }}
@@ -112,9 +109,9 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
         style={{
           position: "absolute",
           top: 18,
-          left: 16,
+          left: SP.xxxl,
           color: "rgba(255,255,255,0.5)",
-          fontSize: 11,
+          fontSize: FONT.sm,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
           zIndex: 2001,
@@ -129,7 +126,7 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
           onClick={(e) => { e.stopPropagation(); goPrev(); }}
           style={{
             position: "absolute",
-            left: 16,
+            left: SP.xxxl,
             top: "50%",
             transform: "translateY(-50%)",
             background: "rgba(255,255,255,0.12)",
@@ -138,13 +135,11 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
             fontSize: 28,
             width: 48,
             height: 48,
-            borderRadius: "50%",
+            borderRadius: RADIUS.full,
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            ...flex.center,
             zIndex: 2001,
-            transition: "background 0.15s",
+            transition: `background ${TRANSITION.fast}`,
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
@@ -160,7 +155,7 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
           onClick={(e) => { e.stopPropagation(); goNext(); }}
           style={{
             position: "absolute",
-            right: 16,
+            right: SP.xxxl,
             top: "50%",
             transform: "translateY(-50%)",
             background: "rgba(255,255,255,0.12)",
@@ -169,13 +164,11 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
             fontSize: 28,
             width: 48,
             height: 48,
-            borderRadius: "50%",
+            borderRadius: RADIUS.full,
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            ...flex.center,
             zIndex: 2001,
-            transition: "background 0.15s",
+            transition: `background ${TRANSITION.fast}`,
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
@@ -195,14 +188,14 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
             maxWidth: "90vw",
             maxHeight: "90vh",
             objectFit: "contain",
-            borderRadius: 4,
+            borderRadius: RADIUS.sm,
             boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
             userSelect: "none",
           }}
           draggable={false}
         />
       ) : (
-        <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 16 }}>
+        <div style={{ color: "rgba(255,255,255,0.5)", fontSize: FONT.xl }}>
           Image non disponible
         </div>
       )}
@@ -213,14 +206,13 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
           onClick={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
-            bottom: 16,
+            bottom: SP.xxxl,
             left: "50%",
             transform: "translateX(-50%)",
-            display: "flex",
-            gap: 6,
-            padding: "6px 10px",
+            ...flex.rowGap(SP.m),
+            padding: `${SP.m}px ${SP.lg}px`,
             background: "rgba(0,0,0,0.6)",
-            borderRadius: 8,
+            borderRadius: RADIUS.lg,
             maxWidth: "80vw",
             overflowX: "auto",
             zIndex: 2001,
@@ -235,13 +227,13 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
                 style={{
                   width: 48,
                   height: 48,
-                  borderRadius: 4,
+                  borderRadius: RADIUS.sm,
                   overflow: "hidden",
                   cursor: "pointer",
                   border: i === index ? "2px solid #fff" : "2px solid transparent",
                   opacity: i === index ? 1 : 0.6,
                   flexShrink: 0,
-                  transition: "opacity 0.15s, border-color 0.15s",
+                  transition: `opacity ${TRANSITION.fast}, border-color ${TRANSITION.fast}`,
                 }}
               >
                 {thumbSrc ? (
@@ -256,11 +248,9 @@ export function LightboxModal({ images, initialIndex, onClose }: LightboxModalPr
                     width: "100%",
                     height: "100%",
                     background: "rgba(255,255,255,0.1)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    ...flex.center,
                     color: "rgba(255,255,255,0.4)",
-                    fontSize: 10,
+                    fontSize: FONT.xs,
                   }}>
                     ?
                   </div>

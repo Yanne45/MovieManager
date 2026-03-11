@@ -307,6 +307,8 @@ pub struct Collection {
     pub name: String,
     pub description: Option<String>,
     pub poster_path: Option<String>,
+    pub is_smart: bool,
+    pub smart_rules: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -482,6 +484,8 @@ pub struct CollectionWithCount {
     pub name: String,
     pub description: Option<String>,
     pub poster_path: Option<String>,
+    pub is_smart: bool,
+    pub smart_rules: Option<String>,
     pub item_count: i64,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

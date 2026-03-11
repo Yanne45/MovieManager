@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { TabBar, SectionTitle, EmptyState, LoadingSpinner } from "../components/ui";
 import * as api from "../lib/api";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, TRANSITION, flex, btn, badge, input } from "../lib/tokens";
 
 // ============================================================================
 // Types (inbox_items from DB)
@@ -27,20 +28,40 @@ export interface InboxItem {
 interface InboxPageProps {
   items: InboxItem[];
   onResolve?: (id: number, action: "link" | "ignore", tmdbId?: number, entityType?: "movie" | "series") => void;
+  onBatch?: (ids: number[], action: "ignore" | "reopen" | "delete") => void;
   onSearchTmdb?: (query: string) => void;
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  unrecognized: "Fichiers non reconnus",
+  low_confidence: "Confiance faible",
+  conflict: "Conflits de numerotation",
+  placeholder: "Series placeholder",
+  dropped: "Fichiers importes",
+};
 
 // ============================================================================
 // Inbox Page
 // ============================================================================
 
-export function InboxPage({ items, onResolve }: InboxPageProps) {
+export function InboxPage({ items, onResolve, onBatch }: InboxPageProps) {
   const [tab, setTab] = useState("pending");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [previewData, setPreviewData] = useState<api.BatchPreview | null>(null);
+  const [previewAction, setPreviewAction] = useState<"ignore" | "reopen" | "delete" | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const pending = useMemo(() => items.filter((i) => i.status === "pending"), [items]);
   const resolved = useMemo(() => items.filter((i) => i.status !== "pending"), [items]);
 
   const displayed = tab === "pending" ? pending : resolved;
+  const displayedIds = useMemo(() => new Set(displayed.map((i) => i.id)), [displayed]);
+
+  // Clear selection when switching tabs
+  const handleTabChange = useCallback((newTab: string) => {
+    setTab(newTab);
+    setSelected(new Set());
+  }, []);
 
   const categoryGroups = useMemo(() => {
     const groups: Record<string, InboxItem[]> = {};
@@ -52,53 +73,400 @@ export function InboxPage({ items, onResolve }: InboxPageProps) {
     return groups;
   }, [displayed]);
 
-  const CATEGORY_LABELS: Record<string, string> = {
-    unrecognized: "Fichiers non reconnus",
-    low_confidence: "Confiance faible",
-    conflict: "Conflits de numérotation",
-    placeholder: "Séries placeholder",
-    dropped: "Fichiers importés",
-  };
+  // Selection helpers
+  const toggleItem = useCallback((id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelected((prev) => {
+      if (prev.size === displayedIds.size) return new Set();
+      return new Set(displayedIds);
+    });
+  }, [displayedIds]);
+
+  const toggleCategory = useCallback((categoryItems: InboxItem[]) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const catIds = categoryItems.map((i) => i.id);
+      const allSelected = catIds.every((id) => next.has(id));
+      if (allSelected) {
+        catIds.forEach((id) => next.delete(id));
+      } else {
+        catIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, []);
+
+  // Only count selected items visible in current tab
+  const selectedInView = useMemo(
+    () => [...selected].filter((id) => displayedIds.has(id)),
+    [selected, displayedIds]
+  );
+
+  // Batch actions with preview
+  const handleBatchAction = useCallback(
+    async (action: "ignore" | "reopen" | "delete") => {
+      if (selectedInView.length === 0) return;
+      setPreviewLoading(true);
+      setPreviewAction(action);
+      try {
+        const preview = await api.batchPreviewInbox(selectedInView);
+        setPreviewData(preview);
+      } catch (err) {
+        console.error("Preview error:", err);
+        setPreviewData(null);
+        setPreviewAction(null);
+      } finally {
+        setPreviewLoading(false);
+      }
+    },
+    [selectedInView]
+  );
+
+  const confirmBatch = useCallback(() => {
+    if (!previewAction || selectedInView.length === 0) return;
+    onBatch?.(selectedInView, previewAction);
+    setSelected(new Set());
+    setPreviewData(null);
+    setPreviewAction(null);
+  }, [previewAction, selectedInView, onBatch]);
+
+  const cancelPreview = useCallback(() => {
+    setPreviewData(null);
+    setPreviewAction(null);
+  }, []);
+
+  // Available batch actions depend on the current tab
+  const batchActions = tab === "pending"
+    ? [{ key: "ignore" as const, label: "Ignorer la selection" }]
+    : [
+        { key: "reopen" as const, label: "Reouvrir la selection" },
+        { key: "delete" as const, label: "Supprimer la selection" },
+      ];
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ ...flex.col, flex: 1, overflow: "hidden" }}>
       <TabBar
         tabs={[
           { id: "pending", label: `En attente (${pending.length})` },
-          { id: "resolved", label: `Traités (${resolved.length})` },
+          { id: "resolved", label: `Traites (${resolved.length})` },
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={handleTabChange}
       />
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+      {/* Batch action bar */}
+      {selectedInView.length > 0 && (
+        <BatchActionBar
+          count={selectedInView.length}
+          actions={batchActions}
+          onAction={handleBatchAction}
+          loading={previewLoading}
+        />
+      )}
+
+      <div style={{ flex: 1, overflowY: "auto", padding: `${SP.xxxl}px ${SP.huge}px` }}>
         {Object.entries(categoryGroups).length === 0 && (
-          <EmptyState message={tab === "pending" ? "Aucun élément en attente" : "Aucun élément traité"} />
+          <EmptyState message={tab === "pending" ? "Aucun element en attente" : "Aucun element traite"} />
         )}
 
-        {Object.entries(categoryGroups).map(([category, groupItems]) => (
-          <div key={category} style={{ marginBottom: 24 }}>
-            <SectionTitle>{CATEGORY_LABELS[category] || category}</SectionTitle>
-
-            {groupItems.map((item) => (
-              <InboxCard key={item.id} item={item} onResolve={onResolve} />
-            ))}
+        {/* Select all toggle */}
+        {displayed.length > 0 && (
+          <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.xl }}>
+            <input
+              type="checkbox"
+              checked={selectedInView.length === displayed.length && displayed.length > 0}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedInView.length > 0 && selectedInView.length < displayed.length;
+              }}
+              onChange={toggleAll}
+              style={{ cursor: "pointer" }}
+            />
+            <span style={{ fontSize: FONT.base, color: COLORS.textSecondary }}>
+              {selectedInView.length > 0
+                ? `${selectedInView.length} / ${displayed.length} selectionne(s)`
+                : "Tout selectionner"}
+            </span>
           </div>
-        ))}
+        )}
+
+        {Object.entries(categoryGroups).map(([category, groupItems]) => {
+          const catAllSelected = groupItems.every((i) => selected.has(i.id));
+          const catSomeSelected = groupItems.some((i) => selected.has(i.id));
+          return (
+            <div key={category} style={{ marginBottom: SP.mega }}>
+              <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.s }}>
+                <input
+                  type="checkbox"
+                  checked={catAllSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = catSomeSelected && !catAllSelected;
+                  }}
+                  onChange={() => toggleCategory(groupItems)}
+                  style={{ cursor: "pointer" }}
+                />
+                <SectionTitle style={{ margin: 0 }}>
+                  {CATEGORY_LABELS[category] || category} ({groupItems.length})
+                </SectionTitle>
+              </div>
+
+              {groupItems.map((item) => (
+                <InboxCard
+                  key={item.id}
+                  item={item}
+                  selected={selected.has(item.id)}
+                  onToggle={() => toggleItem(item.id)}
+                  onResolve={onResolve}
+                />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Preview modal */}
+      {previewData && previewAction && (
+        <BatchPreviewModal
+          preview={previewData}
+          action={previewAction}
+          onConfirm={confirmBatch}
+          onCancel={cancelPreview}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Batch Action Bar (sticky top)
+// ============================================================================
+
+function BatchActionBar({
+  count,
+  actions,
+  onAction,
+  loading,
+}: {
+  count: number;
+  actions: { key: "ignore" | "reopen" | "delete"; label: string }[];
+  onAction: (action: "ignore" | "reopen" | "delete") => void;
+  loading: boolean;
+}) {
+  return (
+    <div
+      style={{
+        ...flex.rowGap(SP.xl),
+        padding: `${SP.base}px ${SP.huge}px`,
+        background: COLORS.primarySoft,
+        borderBottom: `1px solid ${COLORS.border}`,
+      }}
+    >
+      <span style={{ fontSize: FONT.base, fontWeight: WEIGHT.semi, color: COLORS.primary }}>
+        {count} element(s) selectionne(s)
+      </span>
+      <div style={{ flex: 1 }} />
+      {actions.map((a) => (
+        <button
+          key={a.key}
+          onClick={() => onAction(a.key)}
+          disabled={loading}
+          style={{
+            ...btn.base,
+            padding: `${SP.s + 1}px ${SP.xxl}px`,
+            border: a.key === "delete" ? `1px solid ${COLORS.error}` : `1px solid ${COLORS.border}`,
+            background: a.key === "delete" ? COLORS.error : COLORS.bgSurface,
+            color: a.key === "delete" ? "#fff" : COLORS.textMain,
+            cursor: loading ? "wait" : "pointer",
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          {loading ? "..." : a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// Batch Preview Modal
+// ============================================================================
+
+function BatchPreviewModal({
+  preview,
+  action,
+  onConfirm,
+  onCancel,
+}: {
+  preview: api.BatchPreview;
+  action: "ignore" | "reopen" | "delete";
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const actionLabels: Record<string, string> = {
+    ignore: "Ignorer",
+    reopen: "Reouvrir",
+    delete: "Supprimer",
+  };
+
+  const actionColors: Record<string, string> = {
+    ignore: COLORS.warning,
+    reopen: COLORS.primary,
+    delete: COLORS.error,
+  };
+
+  return (
+    <div
+      style={{
+        ...flex.center,
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        zIndex: 1000,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        style={{
+          background: COLORS.bgSurface,
+          borderRadius: RADIUS.xl,
+          padding: SP.mega,
+          minWidth: 400,
+          maxWidth: 520,
+          maxHeight: "70vh",
+          overflowY: "auto",
+          border: `1px solid ${COLORS.border}`,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 style={{ margin: `0 0 ${SP.xxxl}px`, fontSize: 15, fontWeight: WEIGHT.semi }}>
+          Previsualisation : {actionLabels[action]}
+        </h3>
+
+        {/* Summary */}
+        <div
+          style={{
+            padding: SP.xl,
+            borderRadius: RADIUS.lg,
+            background: COLORS.bgSurfaceAlt,
+            marginBottom: SP.xxxl,
+          }}
+        >
+          <div style={{ fontSize: FONT.md, fontWeight: WEIGHT.semi, marginBottom: SP.base }}>
+            {preview.total} element(s) concerne(s)
+          </div>
+
+          {/* By category */}
+          <div style={{ fontSize: FONT.base, color: COLORS.textSecondary, marginBottom: SP.m }}>
+            Par categorie :
+          </div>
+          {Object.entries(preview.by_category).map(([cat, count]) => (
+            <div
+              key={cat}
+              style={{ ...flex.rowBetween, fontSize: FONT.base, padding: `${SP.xs}px 0` }}
+            >
+              <span>{CATEGORY_LABELS[cat] || cat}</span>
+              <span style={{ fontWeight: WEIGHT.semi }}>{count}</span>
+            </div>
+          ))}
+
+          {/* By status */}
+          {Object.keys(preview.by_status).length > 1 && (
+            <>
+              <div style={{ fontSize: FONT.base, color: COLORS.textSecondary, marginTop: SP.base, marginBottom: SP.m }}>
+                Par statut :
+              </div>
+              {Object.entries(preview.by_status).map(([st, count]) => (
+                <div
+                  key={st}
+                  style={{ ...flex.rowBetween, fontSize: FONT.base, padding: `${SP.xs}px 0` }}
+                >
+                  <span>{st === "pending" ? "En attente" : st === "resolved" ? "Resolu" : st === "ignored" ? "Ignore" : st}</span>
+                  <span style={{ fontWeight: WEIGHT.semi }}>{count}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Item list */}
+        <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: SP.xxxl }}>
+          {preview.items.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                ...flex.rowGap(SP.base),
+                padding: `${SP.s}px ${SP.base}px`,
+                borderRadius: RADIUS.sm,
+                marginBottom: SP.xs,
+                fontSize: FONT.base,
+                background: COLORS.bgSurfaceAlt,
+              }}
+            >
+              <CategoryBadge category={item.category} />
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {item.parsed_title || `#${item.id}`}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Warning for delete */}
+        {action === "delete" && (
+          <div style={{ fontSize: FONT.base, color: COLORS.error, marginBottom: SP.xl, fontWeight: WEIGHT.medium }}>
+            Cette action est irreversible. Les elements seront supprimes definitivement.
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: SP.lg }}>
+          <button
+            onClick={onCancel}
+            style={{
+              ...btn.base,
+              padding: `${SP.m}px ${SP.xxxl}px`,
+              background: "transparent",
+              color: COLORS.textSecondary,
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              ...btn.primary,
+              padding: `${SP.m}px ${SP.xxxl}px`,
+              background: actionColors[action],
+            }}
+          >
+            {actionLabels[action]} {preview.total} element(s)
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 // ============================================================================
-// Inbox Card (with inline TMDB search)
+// Inbox Card (with inline TMDB search + checkbox)
 // ============================================================================
 
 function InboxCard({
   item,
+  selected,
+  onToggle,
   onResolve,
 }: {
   item: InboxItem;
+  selected: boolean;
+  onToggle: () => void;
   onResolve?: (id: number, action: "link" | "ignore", tmdbId?: number, entityType?: "movie" | "series") => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -109,27 +477,33 @@ function InboxCard({
     ? item.file_path.split(/[/\\]/).pop()
     : item.parsed_title || "Fichier inconnu";
 
-  // Determine if this is a series item (has season/episode info)
   const isSeries = item.parsed_season != null || item.parsed_episode != null;
 
   return (
     <div
       style={{
-        padding: "12px 14px",
-        marginBottom: 8,
-        borderRadius: 8,
-        border: "1px solid var(--border)",
-        background: "var(--bg-surface)",
+        padding: `${SP.xl}px ${SP.xxl}px`,
+        marginBottom: SP.base,
+        borderRadius: RADIUS.lg,
+        border: selected ? `1px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`,
+        background: selected ? COLORS.primarySoft : COLORS.bgSurface,
+        transition: `border-color ${TRANSITION.fast}, background ${TRANSITION.fast}`,
       }}
     >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={flex.rowGap(SP.lg)}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          style={{ cursor: "pointer", flexShrink: 0 }}
+        />
         <CategoryBadge category={item.category} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 13,
-              fontWeight: 500,
+              fontSize: FONT.md,
+              fontWeight: WEIGHT.medium,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -137,7 +511,7 @@ function InboxCard({
           >
             {fileName}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+          <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.xs }}>
             {[
               item.parsed_title,
               item.parsed_year,
@@ -148,22 +522,22 @@ function InboxCard({
               .join(" · ")}
           </div>
         </div>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
           {item.created_at?.slice(0, 10)}
         </span>
       </div>
 
       {/* Existing candidates from auto-match */}
       {candidates.length > 0 && (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: SP.lg }}>
           <button
             onClick={() => setExpanded(!expanded)}
             style={{
               background: "none",
               border: "none",
-              fontSize: 11,
-              fontWeight: 500,
-              color: "var(--color-primary)",
+              fontSize: FONT.sm,
+              fontWeight: WEIGHT.medium,
+              color: COLORS.primary,
               cursor: "pointer",
               padding: 0,
             }}
@@ -172,7 +546,7 @@ function InboxCard({
           </button>
 
           {expanded && (
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: SP.base }}>
               {candidates.map((c, i) => (
                 <CandidateRow
                   key={i}
@@ -189,18 +563,12 @@ function InboxCard({
 
       {/* Actions */}
       {item.status === "pending" && (
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div style={{ display: "flex", gap: SP.base, marginTop: SP.lg }}>
           <button
             onClick={() => setShowSearch(!showSearch)}
             style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--color-primary)",
-              color: "#fff",
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: "pointer",
+              ...btn.primary,
+              padding: `${SP.s}px ${SP.xl}px`,
             }}
           >
             Rechercher TMDB
@@ -208,13 +576,9 @@ function InboxCard({
           <button
             onClick={() => onResolve?.(item.id, "ignore")}
             style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: 11,
-              cursor: "pointer",
+              ...btn.ghost,
+              padding: `${SP.s}px ${SP.xl}px`,
+              border: `1px solid ${COLORS.border}`,
             }}
           >
             Ignorer
@@ -238,7 +602,7 @@ function InboxCard({
 
       {/* Resolved note */}
       {item.status !== "pending" && item.resolution_note && (
-        <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>
+        <div style={{ marginTop: SP.base, fontSize: FONT.sm, color: COLORS.textMuted, fontStyle: "italic" }}>
           {item.resolution_note}
         </div>
       )}
@@ -308,19 +672,19 @@ function TmdbSearchPanel({
   return (
     <div
       style={{
-        marginTop: 10,
-        padding: 12,
-        borderRadius: 8,
-        background: "var(--bg-surface-alt)",
-        border: "1px solid var(--border)",
+        marginTop: SP.lg,
+        padding: SP.xl,
+        borderRadius: RADIUS.lg,
+        background: COLORS.bgSurfaceAlt,
+        border: `1px solid ${COLORS.border}`,
       }}
     >
       {/* Search form */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+      <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.lg }}>
         {/* Type toggle */}
-        <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--border)", overflow: "hidden" }}>
+        <div style={{ ...flex.row, borderRadius: RADIUS.sm, border: `1px solid ${COLORS.border}`, overflow: "hidden" }}>
           <TypeButton label="Film" active={searchType === "movie"} onClick={() => setSearchType("movie")} />
-          <TypeButton label="Série" active={searchType === "series"} onClick={() => setSearchType("series")} />
+          <TypeButton label="Serie" active={searchType === "series"} onClick={() => setSearchType("series")} />
         </div>
 
         {/* Query */}
@@ -329,16 +693,11 @@ function TmdbSearchPanel({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Titre…"
+          placeholder="Titre..."
           style={{
+            ...input.base,
             flex: 1,
-            padding: "5px 10px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface)",
-            fontSize: 12,
-            color: "var(--text-main)",
-            outline: "none",
+            padding: `${SP.s + 1}px ${SP.lg}px`,
           }}
           autoFocus
         />
@@ -348,15 +707,11 @@ function TmdbSearchPanel({
           type="number"
           value={year}
           onChange={(e) => setYear(e.target.value)}
-          placeholder="Année"
+          placeholder="Annee"
           style={{
+            ...input.base,
             width: 65,
-            padding: "5px 6px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface)",
-            fontSize: 12,
-            color: "var(--text-main)",
+            padding: `${SP.s + 1}px ${SP.m}px`,
           }}
         />
 
@@ -364,30 +719,22 @@ function TmdbSearchPanel({
           onClick={handleSearch}
           disabled={loading || !query.trim()}
           style={{
-            padding: "5px 14px",
-            borderRadius: 6,
-            border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
-            fontSize: 11,
-            fontWeight: 600,
+            ...btn.primary,
+            padding: `${SP.s + 1}px ${SP.xxl}px`,
             cursor: loading ? "wait" : "pointer",
             opacity: !query.trim() ? 0.5 : 1,
           }}
         >
-          {loading ? "…" : "Chercher"}
+          {loading ? "..." : "Chercher"}
         </button>
 
         <button
           onClick={onClose}
           style={{
-            padding: "5px 8px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
+            ...btn.base,
+            padding: `${SP.s + 1}px ${SP.base}px`,
             background: "transparent",
-            color: "var(--text-muted)",
-            fontSize: 11,
-            cursor: "pointer",
+            color: COLORS.textMuted,
           }}
         >
           ✕
@@ -396,14 +743,14 @@ function TmdbSearchPanel({
 
       {/* Results */}
       {loading && (
-        <div style={{ padding: 16, textAlign: "center" }}>
-          <LoadingSpinner message="Recherche en cours…" />
+        <div style={{ padding: SP.xxxl, textAlign: "center" }}>
+          <LoadingSpinner message="Recherche en cours..." />
         </div>
       )}
 
       {!loading && searched && results.length === 0 && (
-        <div style={{ padding: 12, textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
-          Aucun résultat trouvé
+        <div style={{ padding: SP.xl, textAlign: "center", color: COLORS.textMuted, fontSize: FONT.base }}>
+          Aucun resultat trouve
         </div>
       )}
 
@@ -415,12 +762,12 @@ function TmdbSearchPanel({
               style={{
                 display: "flex",
                 alignItems: "flex-start",
-                gap: 10,
-                padding: "8px 10px",
-                borderRadius: 6,
-                marginBottom: 4,
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border)",
+                gap: SP.lg,
+                padding: `${SP.base}px ${SP.lg}px`,
+                borderRadius: RADIUS.md,
+                marginBottom: SP.s,
+                background: COLORS.bgSurface,
+                border: `1px solid ${COLORS.border}`,
               }}
             >
               {/* Mini poster */}
@@ -428,15 +775,15 @@ function TmdbSearchPanel({
                 <img
                   src={`https://image.tmdb.org/t/p/w92${r.posterPath}`}
                   alt=""
-                  style={{ width: 36, height: 54, borderRadius: 4, objectFit: "cover", flexShrink: 0 }}
+                  style={{ width: 36, height: 54, borderRadius: RADIUS.sm, objectFit: "cover", flexShrink: 0 }}
                 />
               ) : (
                 <div
                   style={{
                     width: 36,
                     height: 54,
-                    borderRadius: 4,
-                    background: "var(--bg-surface-alt)",
+                    borderRadius: RADIUS.sm,
+                    background: COLORS.bgSurfaceAlt,
                     flexShrink: 0,
                   }}
                 />
@@ -444,17 +791,17 @@ function TmdbSearchPanel({
 
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>
+                <div style={{ fontSize: FONT.base, fontWeight: WEIGHT.semi }}>
                   {r.title}
-                  {r.year && <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 6 }}>({r.year})</span>}
+                  {r.year && <span style={{ fontWeight: WEIGHT.normal, color: COLORS.textMuted, marginLeft: SP.m }}>({r.year})</span>}
                 </div>
                 {r.overview && (
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.3 }}>
-                    {r.overview}{r.overview.length >= 120 ? "…" : ""}
+                  <div style={{ fontSize: FONT.sm, color: COLORS.textSecondary, marginTop: SP.xs, lineHeight: 1.3 }}>
+                    {r.overview}{r.overview.length >= 120 ? "..." : ""}
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                  TMDB #{r.id} · {r.type === "movie" ? "Film" : "Série"}
+                <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginTop: SP.s }}>
+                  TMDB #{r.id} · {r.type === "movie" ? "Film" : "Serie"}
                 </div>
               </div>
 
@@ -462,14 +809,10 @@ function TmdbSearchPanel({
               <button
                 onClick={() => onLink(r.id, r.type)}
                 style={{
-                  padding: "4px 12px",
-                  borderRadius: 4,
-                  border: "none",
-                  background: "var(--color-primary)",
-                  color: "#fff",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  ...btn.primary,
+                  padding: `${SP.s}px ${SP.xl}px`,
+                  fontSize: FONT.xs,
+                  borderRadius: RADIUS.sm,
                   flexShrink: 0,
                   alignSelf: "center",
                 }}
@@ -502,29 +845,23 @@ function CandidateRow({
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "6px 10px",
-        borderRadius: 6,
-        marginBottom: 4,
-        background: "var(--bg-surface-alt)",
-        gap: 10,
+        ...flex.rowGap(SP.lg),
+        padding: `${SP.m}px ${SP.lg}px`,
+        borderRadius: RADIUS.md,
+        marginBottom: SP.s,
+        background: COLORS.bgSurfaceAlt,
       }}
     >
-      <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{title}</span>
-      {year && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{year}</span>}
+      <span style={{ flex: 1, fontSize: FONT.base, fontWeight: WEIGHT.medium }}>{title}</span>
+      {year && <span style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>{year}</span>}
       <ConfidenceBadge value={confidence} />
       <button
         onClick={onLink}
         style={{
-          padding: "3px 10px",
-          borderRadius: 4,
-          border: "none",
-          background: "var(--color-primary)",
-          color: "#fff",
-          fontSize: 10,
-          fontWeight: 600,
-          cursor: "pointer",
+          ...btn.primary,
+          padding: `${SP.s}px ${SP.lg}px`,
+          fontSize: FONT.xs,
+          borderRadius: RADIUS.sm,
         }}
       >
         Lier
@@ -538,11 +875,11 @@ function TypeButton({ label, active, onClick }: { label: string; active: boolean
     <button
       onClick={onClick}
       style={{
-        padding: "3px 10px",
-        fontSize: 10,
-        fontWeight: active ? 600 : 400,
-        color: active ? "var(--color-primary)" : "var(--text-muted)",
-        background: active ? "var(--color-primary-soft)" : "transparent",
+        padding: `${SP.s}px ${SP.lg}px`,
+        fontSize: FONT.xs,
+        fontWeight: active ? WEIGHT.semi : WEIGHT.normal,
+        color: active ? COLORS.primary : COLORS.textMuted,
+        background: active ? COLORS.primarySoft : "transparent",
         border: "none",
         cursor: "pointer",
       }}
@@ -557,18 +894,16 @@ function CategoryBadge({ category }: { category: string }) {
     unrecognized: { bg: "var(--score-d-bg)", text: "var(--score-d-text)", label: "Non reconnu" },
     low_confidence: { bg: "var(--score-c-bg)", text: "var(--score-c-text)", label: "Confiance faible" },
     conflict: { bg: "var(--score-b-bg)", text: "var(--score-b-text)", label: "Conflit" },
-    placeholder: { bg: "var(--bg-surface-alt)", text: "var(--text-muted)", label: "Placeholder" },
-    dropped: { bg: "var(--score-b-bg)", text: "var(--score-b-text)", label: "Importé" },
+    placeholder: { bg: COLORS.bgSurfaceAlt, text: COLORS.textMuted, label: "Placeholder" },
+    dropped: { bg: "var(--score-b-bg)", text: "var(--score-b-text)", label: "Importe" },
   };
   const s = styles[category] || styles.unrecognized;
 
   return (
     <span
       style={{
-        padding: "2px 8px",
-        borderRadius: 4,
-        fontSize: 10,
-        fontWeight: 600,
+        ...badge.base,
+        padding: `${SP.xs}px ${SP.base}px`,
         background: s.bg,
         color: s.text,
       }}
@@ -579,9 +914,9 @@ function CategoryBadge({ category }: { category: string }) {
 }
 
 function ConfidenceBadge({ value }: { value: number }) {
-  const color = value >= 70 ? "var(--success)" : value >= 40 ? "var(--warning)" : "var(--error)";
+  const color = value >= 70 ? COLORS.success : value >= 40 ? COLORS.warning : COLORS.error;
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, color }}>{value}%</span>
+    <span style={{ fontSize: FONT.sm, fontWeight: WEIGHT.semi, color }}>{value}%</span>
   );
 }
 

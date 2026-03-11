@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SectionTitle, EmptyState, UnderlineInput } from "../components/ui";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, TRANSITION, flex, btn, input } from "../lib/tokens";
 
 // ============================================================================
 // Types (matching Rust RuleCondition / RuleAction)
@@ -30,37 +31,23 @@ export function RulesPage({ rules, onToggle, onDelete, onCreate, onApplyAll }: R
   const [showCreate, setShowCreate] = useState(false);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 800 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+    <div style={{ flex: 1, overflowY: "auto", padding: SP.huge, maxWidth: 800 }}>
+      <div style={{ ...flex.rowBetween, marginBottom: SP.xxxl }}>
         <SectionTitle>Règles d'automatisation</SectionTitle>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ ...flex.rowGap(SP.base) }}>
           <button
             onClick={onApplyAll}
             style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
+              ...btn.base,
               background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
+              color: COLORS.textSecondary,
             }}
           >
             Appliquer toutes
           </button>
           <button
             onClick={() => setShowCreate(true)}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--color-primary)",
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            style={btn.primary}
           >
             + Nouvelle règle
           </button>
@@ -85,53 +72,53 @@ export function RulesPage({ rules, onToggle, onDelete, onCreate, onApplyAll }: R
         <div
           key={rule.id}
           style={{
-            padding: "12px 16px",
-            marginBottom: 8,
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface)",
+            padding: `${SP.xl}px ${SP.xxxl}px`,
+            marginBottom: SP.base,
+            borderRadius: RADIUS.lg,
+            border: `1px solid ${COLORS.border}`,
+            background: COLORS.bgSurface,
             opacity: rule.enabled ? 1 : 0.5,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={flex.rowGap(SP.lg)}>
             {/* Toggle */}
             <button
               onClick={() => onToggle?.(rule.id, !rule.enabled)}
               style={{
                 width: 36,
                 height: 20,
-                borderRadius: 10,
+                borderRadius: SP.lg,
                 border: "none",
-                background: rule.enabled ? "var(--color-primary)" : "var(--bg-surface-alt)",
+                background: rule.enabled ? COLORS.primary : COLORS.bgSurfaceAlt,
                 cursor: "pointer",
                 position: "relative",
-                transition: "background 0.2s",
+                transition: `background ${TRANSITION.normal}`,
               }}
             >
               <div
                 style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: 8,
+                  width: SP.xxxl,
+                  height: SP.xxxl,
+                  borderRadius: RADIUS.lg,
                   background: "#fff",
                   position: "absolute",
                   top: 2,
                   left: rule.enabled ? 18 : 2,
-                  transition: "left 0.2s",
+                  transition: `left ${TRANSITION.normal}`,
                   boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                 }}
               />
             </button>
 
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{rule.name}</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+              <div style={{ fontSize: FONT.md, fontWeight: WEIGHT.medium }}>{rule.name}</div>
+              <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.xs }}>
                 Si{" "}
-                <code style={{ background: "var(--bg-surface-alt)", padding: "1px 4px", borderRadius: 3 }}>
+                <code style={{ background: COLORS.bgSurfaceAlt, padding: `1px ${SP.s}px`, borderRadius: RADIUS.sm }}>
                   {rule.condition.field}
                 </code>{" "}
-                <span style={{ color: "var(--color-primary)" }}>{OPERATOR_LABELS[rule.condition.operator] || rule.condition.operator}</span>{" "}
-                <code style={{ background: "var(--bg-surface-alt)", padding: "1px 4px", borderRadius: 3 }}>
+                <span style={{ color: COLORS.primary }}>{OPERATOR_LABELS[rule.condition.operator] || rule.condition.operator}</span>{" "}
+                <code style={{ background: COLORS.bgSurfaceAlt, padding: `1px ${SP.s}px`, borderRadius: RADIUS.sm }}>
                   {rule.condition.value}
                 </code>{" "}
                 → {ACTION_LABELS[rule.action.action_type] || rule.action.action_type}{" "}
@@ -144,9 +131,9 @@ export function RulesPage({ rules, onToggle, onDelete, onCreate, onApplyAll }: R
               style={{
                 background: "none",
                 border: "none",
-                color: "var(--text-muted)",
+                color: COLORS.textMuted,
                 cursor: "pointer",
-                fontSize: 16,
+                fontSize: FONT.xl,
               }}
             >
               ×
@@ -219,19 +206,19 @@ function CreateRuleForm({
   return (
     <div
       style={{
-        padding: 16,
-        marginBottom: 16,
-        borderRadius: 8,
-        border: "2px solid var(--color-primary)",
-        background: "var(--bg-surface)",
+        padding: SP.xxxl,
+        marginBottom: SP.xxxl,
+        borderRadius: RADIUS.lg,
+        border: `2px solid ${COLORS.primary}`,
+        background: COLORS.bgSurface,
       }}
     >
       <UnderlineInput label="Nom de la règle" value={name} onChange={setName} />
 
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
+      <div style={{ fontSize: FONT.base, fontWeight: WEIGHT.semi, color: COLORS.textMuted, marginBottom: SP.m }}>
         Condition
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.xxl }}>
         <Select value={field} options={FIELDS} onChange={setField} />
         <Select value={operator} options={OPERATORS} onChange={setOperator} />
         <input
@@ -239,49 +226,39 @@ function CreateRuleForm({
           onChange={(e) => setCondValue(e.target.value)}
           placeholder="Valeur"
           style={{
+            ...input.base,
             flex: 1,
-            padding: "6px 10px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            fontSize: 13,
-            background: "var(--bg-surface)",
-            color: "var(--text-main)",
+            padding: `${SP.m}px ${SP.lg}px`,
+            fontSize: FONT.md,
           }}
         />
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
+      <div style={{ fontSize: FONT.base, fontWeight: WEIGHT.semi, color: COLORS.textMuted, marginBottom: SP.m }}>
         Action
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.xxxl }}>
         <Select value={actionType} options={ACTIONS} onChange={setActionType} />
         <input
           value={actionValue}
           onChange={(e) => setActionValue(e.target.value)}
           placeholder="Valeur"
           style={{
+            ...input.base,
             flex: 1,
-            padding: "6px 10px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            fontSize: 13,
-            background: "var(--bg-surface)",
-            color: "var(--text-main)",
+            padding: `${SP.m}px ${SP.lg}px`,
+            fontSize: FONT.md,
           }}
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: SP.base, justifyContent: "flex-end" }}>
         <button
           onClick={onCancel}
           style={{
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
+            ...btn.base,
             background: "transparent",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            cursor: "pointer",
+            color: COLORS.textSecondary,
           }}
         >
           Annuler
@@ -297,14 +274,9 @@ function CreateRuleForm({
           }
           disabled={!canSave}
           style={{
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "none",
-            background: canSave ? "var(--color-primary)" : "var(--bg-surface-alt)",
-            color: canSave ? "#fff" : "var(--text-muted)",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: canSave ? "pointer" : "default",
+            ...btn.primary,
+            background: canSave ? COLORS.primary : COLORS.bgSurfaceAlt,
+            color: canSave ? "#fff" : COLORS.textMuted,
           }}
         >
           Créer
@@ -328,12 +300,8 @@ function Select({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={{
-        padding: "6px 10px",
-        borderRadius: 6,
-        border: "1px solid var(--border)",
-        background: "var(--bg-surface)",
-        color: "var(--text-main)",
-        fontSize: 13,
+        ...input.select,
+        fontSize: FONT.md,
       }}
     >
       {options.map((o) => (

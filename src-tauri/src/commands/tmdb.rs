@@ -1,3 +1,4 @@
+use crate::modules::change_log::{self, ChangeSource};
 use crate::modules::tmdb::{TmdbClient, TmdbMovieSearchResult, TmdbSeriesSearchResult};
 use crate::AppState;
 use tauri::State;
@@ -98,6 +99,7 @@ pub async fn sync_episodes_from_tmdb(
     .map_err(|e| e.to_string())?;
 
     let mut updated = 0usize;
+    let op_id = change_log::new_operation_id();
 
     for (season_id, season_number) in seasons {
         let detail = match client.get_season(tmdb_id, season_number).await {
@@ -111,6 +113,16 @@ pub async fn sync_episodes_from_tmdb(
         let episodes = detail.episodes.unwrap_or_default();
 
         for ep in &episodes {
+            // Get current state for change tracking
+            let before: Option<(i64, Option<String>, Option<String>)> = sqlx::query_as(
+                "SELECT id, title, overview FROM episodes WHERE season_id = ? AND episode_number = ?"
+            )
+            .bind(season_id)
+            .bind(ep.episode_number)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
             let rows = sqlx::query(
                 "UPDATE episodes
                  SET title = COALESCE(?, title),
@@ -131,6 +143,18 @@ pub async fn sync_episodes_from_tmdb(
             .execute(pool)
             .await
             .map_err(|e| e.to_string())?;
+
+            if rows.rows_affected() > 0 {
+                if let Some((episode_id, old_title, _old_overview)) = before {
+                    if let Some(new_title) = &ep.name {
+                        change_log::record_change_op(
+                            pool, "episode", episode_id, "title",
+                            old_title.as_deref(), Some(new_title),
+                            ChangeSource::Tmdb, Some(&op_id),
+                        ).await.ok();
+                    }
+                }
+            }
 
             updated += rows.rows_affected() as usize;
         }

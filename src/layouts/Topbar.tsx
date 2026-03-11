@@ -1,4 +1,5 @@
 import { type RefObject } from "react";
+import { SP, FONT, WEIGHT, RADIUS, SIZES, flex } from "../lib/tokens";
 
 interface TopbarProps {
   title: string;
@@ -32,18 +33,17 @@ export function Topbar({
   return (
     <div
       style={{
-        height: 48,
+        height: SIZES.topbarHeight,
         flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        padding: "0 16px",
+        ...flex.row,
+        padding: `0 ${SP.xxxl}px`,
         background: "var(--header-bg)",
         borderBottom: "1px solid var(--header-border)",
-        gap: 12,
+        gap: SP.xl,
       }}
     >
       {/* Page title */}
-      <span style={{ fontSize: 15, fontWeight: 600, marginRight: 8, color: "var(--header-text)" }}>
+      <span style={{ fontSize: 15, fontWeight: WEIGHT.semi, marginRight: SP.base, color: "var(--header-text)" }}>
         {title}
       </span>
 
@@ -52,11 +52,11 @@ export function Topbar({
         <span
           style={{
             position: "absolute",
-            left: 10,
+            left: SP.lg,
             top: "50%",
             transform: "translateY(-50%)",
             color: "var(--header-text-muted)",
-            fontSize: 13,
+            fontSize: FONT.md,
             pointerEvents: "none",
           }}
         >
@@ -70,11 +70,11 @@ export function Topbar({
           onChange={(e) => onSearchChange(e.target.value)}
           style={{
             width: "100%",
-            padding: "6px 12px 6px 30px",
-            borderRadius: 8,
+            padding: `${SP.m}px ${SP.xl}px ${SP.m}px 30px`,
+            borderRadius: RADIUS.lg,
             border: "1px solid transparent",
             background: "var(--header-input-bg)",
-            fontSize: 13,
+            fontSize: FONT.md,
             color: "var(--header-text)",
             outline: "none",
           }}
@@ -97,7 +97,7 @@ export function Topbar({
         <div
           style={{
             display: "flex",
-            borderRadius: 6,
+            borderRadius: RADIUS.md,
             border: "1px solid var(--header-border)",
             overflow: "hidden",
           }}
@@ -121,14 +121,14 @@ export function Topbar({
           onClick={onCompactToggle}
           title={compact ? "Vue standard" : "Vue compacte"}
           style={{
-            padding: "5px 10px",
-            borderRadius: 6,
+            padding: `5px ${SP.lg}px`,
+            borderRadius: RADIUS.md,
             border: "1px solid var(--header-border)",
             background: compact ? "rgba(255, 255, 255, 0.2)" : "var(--header-btn-bg)",
             color: "var(--header-text)",
-            fontSize: 11,
+            fontSize: FONT.sm,
             cursor: "pointer",
-            fontWeight: compact ? 600 : 400,
+            fontWeight: compact ? WEIGHT.semi : WEIGHT.normal,
           }}
         >
           {compact ? "⊞" : "⊟"}
@@ -139,12 +139,12 @@ export function Topbar({
       <button
         onClick={onThemeToggle}
         style={{
-          padding: "5px 10px",
-          borderRadius: 6,
+          padding: `5px ${SP.lg}px`,
+          borderRadius: RADIUS.md,
           border: "1px solid var(--header-border)",
           background: "var(--header-btn-bg)",
           color: "var(--header-text)",
-          fontSize: 13,
+          fontSize: FONT.md,
           cursor: "pointer",
         }}
       >
@@ -156,13 +156,13 @@ export function Topbar({
         <button
           onClick={onImport}
           style={{
-            padding: "5px 14px",
-            borderRadius: 6,
+            padding: `5px ${SP.xxl}px`,
+            borderRadius: RADIUS.md,
             border: "none",
             background: "var(--header-accent)",
             color: "#0F2347",
-            fontSize: 12,
-            fontWeight: 600,
+            fontSize: FONT.base,
+            fontWeight: WEIGHT.semi,
             cursor: "pointer",
           }}
         >
@@ -186,9 +186,9 @@ function ViewButton({
     <button
       onClick={onClick}
       style={{
-        padding: "4px 12px",
-        fontSize: 11,
-        fontWeight: active ? 600 : 400,
+        padding: `${SP.s}px ${SP.xl}px`,
+        fontSize: FONT.sm,
+        fontWeight: active ? WEIGHT.semi : WEIGHT.normal,
         color: active ? "#FFFFFF" : "rgba(255, 255, 255, 0.8)",
         background: active ? "rgba(255, 255, 255, 0.2)" : "transparent",
         border: "none",

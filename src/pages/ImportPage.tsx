@@ -4,16 +4,18 @@ import type {
   ScannedFilePreview,
   ImportFileInput,
   ImportFileResult,
+  DryRunSummary,
   TmdbMovieSearchResult,
   TmdbSeriesSearchResult,
 } from "../lib/api";
-import { previewScanPaths, importFiles, searchMovieTmdb, searchSeriesTmdb } from "../lib/api";
+import { previewScanPaths, importFiles, dryRunImport, searchMovieTmdb, searchSeriesTmdb } from "../lib/api";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, TRANSITION, flex, cell, th as thPreset, badge, input as inputPreset } from "../lib/tokens";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type Phase = "drop" | "preview" | "importing" | "done";
+type Phase = "drop" | "preview" | "confirm" | "importing" | "done";
 
 /** User-editable row built from ScannedFilePreview */
 interface PreviewRow extends ScannedFilePreview {
@@ -55,6 +57,7 @@ export function ImportPage({
   const [phase, setPhase] = useState<Phase>("drop");
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [results, setResults] = useState<ImportFileResult[]>([]);
+  const [dryRunData, setDryRunData] = useState<DryRunSummary | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [tmdbSearching, setTmdbSearching] = useState<string | null>(null); // file_path being searched
@@ -289,21 +292,41 @@ export function ImportPage({
     }
   }, [rows, searchTmdb]);
 
-  // ── Import ────────────────────────────────────────────────────────────────
+  // ── Dry-run (impact preview) ──────────────────────────────────────────────
 
-  const startImport = useCallback(async () => {
-    const included = rows.filter((r) => r.included);
-    if (included.length === 0) return;
-
-    setPhase("importing");
-
-    const inputs: ImportFileInput[] = included.map((r) => ({
+  const buildInputs = useCallback((): ImportFileInput[] => {
+    return rows.filter((r) => r.included).map((r) => ({
       file_path: r.file_path,
       title: r.editTitle || r.file_name,
       year: r.editYear ? Number(r.editYear) : null,
       entity_type: r.editType,
       tmdb_id: r.tmdbId,
     }));
+  }, [rows]);
+
+  const startDryRun = useCallback(async () => {
+    const inputs = buildInputs();
+    if (inputs.length === 0) return;
+
+    setScanning(true);
+    try {
+      const summary = await dryRunImport(inputs);
+      setDryRunData(summary);
+      setPhase("confirm");
+    } catch (e) {
+      alert(`Erreur dry-run : ${e}`);
+    } finally {
+      setScanning(false);
+    }
+  }, [buildInputs]);
+
+  // ── Import (after confirmation) ─────────────────────────────────────────
+
+  const confirmImport = useCallback(async () => {
+    const inputs = buildInputs();
+    if (inputs.length === 0) return;
+
+    setPhase("importing");
 
     try {
       const res = await importFiles(inputs);
@@ -311,18 +334,17 @@ export function ImportPage({
       setPhase("done");
     } catch (e) {
       alert(`Erreur d'import : ${e}`);
-      setPhase("preview");
+      setPhase("confirm");
     }
-  }, [rows]);
+  }, [buildInputs]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div
       style={{
+        ...flex.col,
         flex: 1,
-        display: "flex",
-        flexDirection: "column",
         overflow: "hidden",
         background: "var(--bg-main)",
       }}
@@ -330,24 +352,22 @@ export function ImportPage({
       {/* Header */}
       <div
         style={{
-          padding: "18px 24px 14px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          background: "var(--bg-surface)",
+          ...flex.rowGap(SP.xl),
+          padding: `${SP.huge}px ${SP.mega}px ${SP.xxl}px`,
+          borderBottom: `1px solid ${COLORS.border}`,
+          background: COLORS.bgSurface,
           flexShrink: 0,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-main)" }}>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: WEIGHT.bold, color: COLORS.textMain }}>
           Importer des vidéos
         </h2>
 
         {phase === "preview" && (
           <>
             <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              {rows.filter((r) => r.included).length} / {rows.length} fichiers sélectionnés
+            <span style={{ fontSize: FONT.md, color: COLORS.textMuted }}>
+              {rows.filter((r) => r.included).length} / {rows.length} fichiers selectionnes
             </span>
             <button
               onClick={() => { setPhase("drop"); setRows([]); setScanError(null); }}
@@ -360,14 +380,32 @@ export function ImportPage({
               style={btnStyle("secondary")}
               disabled={tmdbSearching != null}
             >
-              {tmdbSearching ? "Recherche TMDB…" : "TMDB auto"}
+              {tmdbSearching ? "Recherche TMDB..." : "TMDB auto"}
             </button>
             <button
-              onClick={startImport}
+              onClick={startDryRun}
               style={btnStyle("primary")}
-              disabled={rows.filter((r) => r.included).length === 0}
+              disabled={rows.filter((r) => r.included).length === 0 || scanning}
             >
-              Importer →
+              {scanning ? "Analyse..." : "Verifier l'impact →"}
+            </button>
+          </>
+        )}
+
+        {phase === "confirm" && (
+          <>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={() => setPhase("preview")}
+              style={btnStyle("ghost")}
+            >
+              ← Modifier
+            </button>
+            <button
+              onClick={confirmImport}
+              style={btnStyle("primary")}
+            >
+              Confirmer l'import →
             </button>
           </>
         )}
@@ -415,20 +453,23 @@ export function ImportPage({
           />
         )}
 
+        {phase === "confirm" && dryRunData && (
+          <ConfirmPhase summary={dryRunData} />
+        )}
+
         {phase === "importing" && (
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
+              ...flex.col,
               alignItems: "center",
               justifyContent: "center",
               height: "100%",
-              gap: 16,
-              color: "var(--text-muted)",
+              gap: SP.xxxl,
+              color: COLORS.textMuted,
             }}
           >
-            <div style={{ fontSize: 32 }}>⏳</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-main)" }}>
+            <div style={{ fontSize: SP.giga }}>⏳</div>
+            <div style={{ fontSize: FONT.xl, fontWeight: WEIGHT.semi, color: COLORS.textMain }}>
               Import en cours…
             </div>
           </div>
@@ -462,13 +503,12 @@ function DropPhase({
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
+        ...flex.col,
         alignItems: "center",
         justifyContent: "center",
         height: "100%",
-        gap: 24,
-        padding: 32,
+        gap: SP.mega,
+        padding: SP.giga,
       }}
     >
       {/* Drop zone */}
@@ -476,38 +516,37 @@ function DropPhase({
         onDrop={onDrop}
         onDragOver={onDragOver}
         style={{
+          ...flex.col,
           width: "100%",
           maxWidth: 560,
-          border: "2px dashed var(--border)",
-          borderRadius: 16,
-          padding: "48px 32px",
-          display: "flex",
-          flexDirection: "column",
+          border: `2px dashed ${COLORS.border}`,
+          borderRadius: RADIUS.xl + 4,
+          padding: `48px ${SP.giga}px`,
           alignItems: "center",
-          gap: 12,
-          background: "var(--bg-surface)",
+          gap: SP.xl,
+          background: COLORS.bgSurface,
           cursor: "pointer",
-          transition: "border-color 0.2s, background 0.2s",
+          transition: `border-color ${TRANSITION.normal}, background ${TRANSITION.normal}`,
         }}
         onDragEnter={(e) => {
-          e.currentTarget.style.borderColor = "var(--color-primary)";
-          e.currentTarget.style.background = "var(--color-primary-soft)";
+          e.currentTarget.style.borderColor = COLORS.primary;
+          e.currentTarget.style.background = COLORS.primarySoft;
         }}
         onDragLeave={(e) => {
-          e.currentTarget.style.borderColor = "var(--border)";
-          e.currentTarget.style.background = "var(--bg-surface)";
+          e.currentTarget.style.borderColor = COLORS.border;
+          e.currentTarget.style.background = COLORS.bgSurface;
         }}
       >
         <div style={{ fontSize: 40 }}>🎬</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-main)" }}>
+        <div style={{ fontSize: FONT.xl, fontWeight: WEIGHT.semi, color: COLORS.textMain }}>
           {scanning ? "Analyse en cours…" : "Déposez vos fichiers vidéo ici"}
         </div>
-        <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center" }}>
+        <div style={{ fontSize: FONT.md, color: COLORS.textMuted, textAlign: "center" }}>
           MKV, MP4, AVI, MOV et autres formats vidéo
         </div>
 
         {!scanning && (
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div style={{ ...flex.rowGap(SP.base), marginTop: SP.base }}>
             <button onClick={onBrowseFiles} style={btnStyle("primary")}>
               Choisir des fichiers
             </button>
@@ -518,7 +557,7 @@ function DropPhase({
         )}
 
         {scanning && (
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          <div style={{ fontSize: FONT.md, color: COLORS.textMuted }}>
             Scan du répertoire…
           </div>
         )}
@@ -527,12 +566,12 @@ function DropPhase({
       {error && (
         <div
           style={{
-            padding: "10px 16px",
+            padding: `${SP.lg}px ${SP.xxxl}px`,
             background: "var(--error-soft, #fee2e2)",
-            border: "1px solid var(--error)",
-            borderRadius: 8,
-            color: "var(--error)",
-            fontSize: 13,
+            border: `1px solid ${COLORS.error}`,
+            borderRadius: RADIUS.lg,
+            color: COLORS.error,
+            fontSize: FONT.md,
             maxWidth: 560,
             width: "100%",
           }}
@@ -581,21 +620,19 @@ function PreviewPhase({
   const allChecked = rows.every((r) => r.included);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ ...flex.col, height: "100%" }}>
       {/* Bulk edit bar */}
       <div
         style={{
-          padding: "10px 16px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          background: "var(--bg-surface)",
+          ...flex.rowGap(SP.lg),
+          padding: `${SP.lg}px ${SP.xxxl}px`,
+          borderBottom: `1px solid ${COLORS.border}`,
+          background: COLORS.bgSurface,
           flexShrink: 0,
           flexWrap: "wrap",
         }}
       >
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
+        <span style={{ fontSize: FONT.base, fontWeight: WEIGHT.semi, color: COLORS.textMuted, textTransform: "uppercase" }}>
           Édition en lot :
         </span>
         <select
@@ -637,7 +674,7 @@ function PreviewPhase({
           style={{
             width: "100%",
             borderCollapse: "collapse",
-            fontSize: 13,
+            fontSize: FONT.md,
           }}
         >
           <thead>
@@ -645,9 +682,9 @@ function PreviewPhase({
               style={{
                 position: "sticky",
                 top: 0,
-                background: "var(--bg-surface)",
+                background: COLORS.bgSurface,
                 zIndex: 2,
-                borderBottom: "1px solid var(--border)",
+                borderBottom: `1px solid ${COLORS.border}`,
               }}
             >
               <Th style={{ width: 36, textAlign: "center" }}>
@@ -702,7 +739,7 @@ function PreviewRow({
   onRejectTmdb: () => void;
 }) {
   const bg = !row.included
-    ? "var(--bg-surface-alt)"
+    ? COLORS.bgSurfaceAlt
     : row.is_duplicate
     ? "#fef9c3"
     : row.tmdbId
@@ -713,13 +750,13 @@ function PreviewRow({
     <>
       <tr
         style={{
-          borderBottom: "1px solid var(--border)",
+          borderBottom: `1px solid ${COLORS.border}`,
           background: bg,
           opacity: row.included ? 1 : 0.5,
         }}
       >
         {/* Checkbox */}
-        <td style={{ textAlign: "center", padding: "6px 4px" }}>
+        <td style={{ textAlign: "center", padding: `${SP.m}px ${SP.s}px` }}>
           <input
             type="checkbox"
             checked={row.included}
@@ -728,7 +765,7 @@ function PreviewRow({
         </td>
 
         {/* Title */}
-        <td style={{ padding: "4px 8px" }}>
+        <td style={{ padding: `${SP.s}px ${SP.base}px` }}>
           <input
             value={row.editTitle}
             onChange={(e) => onUpdate({ editTitle: e.target.value })}
@@ -736,14 +773,14 @@ function PreviewRow({
             title={row.file_name}
           />
           {row.tmdbId && (
-            <span style={{ fontSize: 10, color: "var(--success)", marginLeft: 4 }}>
+            <span style={{ fontSize: FONT.xs, color: COLORS.success, marginLeft: SP.s }}>
               ✓ TMDB #{row.tmdbId}
             </span>
           )}
         </td>
 
         {/* Year */}
-        <td style={{ padding: "4px 6px" }}>
+        <td style={cell.compact}>
           <input
             value={row.editYear}
             onChange={(e) => onUpdate({ editYear: e.target.value })}
@@ -753,7 +790,7 @@ function PreviewRow({
         </td>
 
         {/* Type */}
-        <td style={{ padding: "4px 6px" }}>
+        <td style={cell.compact}>
           <select
             value={row.editType}
             onChange={(e) => onUpdate({ editType: e.target.value })}
@@ -765,29 +802,29 @@ function PreviewRow({
         </td>
 
         {/* Quality */}
-        <td style={{ padding: "4px 6px", color: "var(--text-muted)" }}>
+        <td style={{ ...cell.compact, color: COLORS.textMuted }}>
           {row.quality ?? "—"}
         </td>
 
         {/* Size */}
-        <td style={{ padding: "4px 8px", textAlign: "right", color: "var(--text-muted)" }}>
+        <td style={{ padding: `${SP.s}px ${SP.base}px`, textAlign: "right", color: COLORS.textMuted }}>
           {row.file_size_mb < 1000
             ? `${row.file_size_mb.toFixed(0)} Mo`
             : `${(row.file_size_mb / 1024).toFixed(1)} Go`}
         </td>
 
         {/* Confidence */}
-        <td style={{ textAlign: "center", padding: "4px 6px" }}>
+        <td style={{ textAlign: "center", ...cell.compact }}>
           <ConfidenceBadge value={row.confidence} />
         </td>
 
         {/* TMDB action */}
-        <td style={{ textAlign: "center", padding: "4px 6px" }}>
+        <td style={{ textAlign: "center", ...cell.compact }}>
           {row.tmdbId ? (
             <button
               onClick={() => onUpdate({ tmdbId: null, tmdbSuggestion: null })}
               title="Retirer l'association TMDB"
-              style={{ ...btnStyle("ghost"), fontSize: 11, padding: "2px 6px" }}
+              style={{ ...btnStyle("ghost"), fontSize: FONT.sm, padding: `${SP.xs}px ${SP.m}px` }}
             >
               ×
             </button>
@@ -796,7 +833,7 @@ function PreviewRow({
               onClick={onSearchTmdb}
               disabled={searching}
               title="Rechercher sur TMDB"
-              style={{ ...btnStyle("secondary"), fontSize: 11, padding: "2px 6px" }}
+              style={{ ...btnStyle("secondary"), fontSize: FONT.sm, padding: `${SP.xs}px ${SP.m}px` }}
             >
               {searching ? "…" : "🔍"}
             </button>
@@ -804,22 +841,22 @@ function PreviewRow({
         </td>
 
         {/* Duplicate indicator */}
-        <td style={{ textAlign: "center", padding: "4px 6px" }}>
+        <td style={{ textAlign: "center", ...cell.compact }}>
           {row.is_duplicate ? (
-            <span title={`Déjà importé : ${row.duplicate_title ?? ""}`} style={{ color: "var(--warning, #f59e0b)", fontSize: 14 }}>
+            <span title={`Déjà importé : ${row.duplicate_title ?? ""}`} style={{ color: COLORS.warning, fontSize: FONT.lg }}>
               ⚠
             </span>
           ) : (
-            <span style={{ color: "var(--success)", fontSize: 14 }}>✓</span>
+            <span style={{ color: COLORS.success, fontSize: FONT.lg }}>✓</span>
           )}
         </td>
       </tr>
 
       {/* TMDB suggestion popup row */}
       {row.tmdbPending && row.tmdbSuggestion && (
-        <tr style={{ background: "var(--color-primary-soft)" }}>
+        <tr style={{ background: COLORS.primarySoft }}>
           <td />
-          <td colSpan={8} style={{ padding: "8px 12px" }}>
+          <td colSpan={8} style={{ padding: `${SP.base}px ${SP.xl}px` }}>
             <TmdbSuggestionBanner
               suggestion={row.tmdbSuggestion}
               onAccept={onAcceptTmdb}
@@ -844,19 +881,17 @@ function TmdbSuggestionBanner({
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        background: "var(--bg-surface)",
-        border: "1px solid var(--color-primary)",
-        borderRadius: 8,
-        padding: "8px 12px",
+        ...flex.rowGap(SP.xl),
+        background: COLORS.bgSurface,
+        border: `1px solid ${COLORS.primary}`,
+        borderRadius: RADIUS.lg,
+        padding: `${SP.base}px ${SP.xl}px`,
       }}
     >
-      <div style={{ fontWeight: 600, color: "var(--text-main)" }}>
+      <div style={{ fontWeight: WEIGHT.semi, color: COLORS.textMain }}>
         {suggestion.title}
         {suggestion.year && (
-          <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 6 }}>
+          <span style={{ fontWeight: WEIGHT.normal, color: COLORS.textMuted, marginLeft: SP.m }}>
             ({suggestion.year})
           </span>
         )}
@@ -865,8 +900,8 @@ function TmdbSuggestionBanner({
         <div
           style={{
             flex: 1,
-            fontSize: 12,
-            color: "var(--text-muted)",
+            fontSize: FONT.base,
+            color: COLORS.textMuted,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -875,7 +910,7 @@ function TmdbSuggestionBanner({
           {suggestion.overview}
         </div>
       )}
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      <div style={{ ...flex.rowGap(SP.m), flexShrink: 0 }}>
         <button onClick={onAccept} style={btnStyle("primary")}>
           ✓ Valider
         </button>
@@ -897,16 +932,16 @@ function DonePhase({ results }: { results: ImportFileResult[] }) {
   const errors = results.filter((r) => r.status === "error");
 
   return (
-    <div style={{ padding: 32, maxWidth: 720, margin: "0 auto" }}>
-      <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>
+    <div style={{ padding: SP.giga, maxWidth: 720, margin: "0 auto" }}>
+      <h3 style={{ margin: `0 0 ${SP.huge}px`, fontSize: FONT.xl, fontWeight: WEIGHT.bold, color: COLORS.textMain }}>
         Import terminé
       </h3>
 
       {/* Summary pills */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-        <SummaryPill count={imported.length} label="importés" color="var(--success)" />
-        <SummaryPill count={inbox.length} label="en attente (Inbox)" color="var(--warning, #f59e0b)" />
-        <SummaryPill count={errors.length} label="erreurs" color="var(--error)" />
+      <div style={{ ...flex.rowGap(SP.xl), marginBottom: SP.mega }}>
+        <SummaryPill count={imported.length} label="importés" color={COLORS.success} />
+        <SummaryPill count={inbox.length} label="en attente (Inbox)" color={COLORS.warning} />
+        <SummaryPill count={errors.length} label="erreurs" color={COLORS.error} />
       </div>
 
       {/* Imported */}
@@ -915,7 +950,7 @@ function DonePhase({ results }: { results: ImportFileResult[] }) {
           title="Importés avec succès"
           rows={imported}
           badge="✓"
-          badgeColor="var(--success)"
+          badgeColor={COLORS.success}
         />
       )}
 
@@ -925,7 +960,7 @@ function DonePhase({ results }: { results: ImportFileResult[] }) {
           title="Envoyés vers l'Inbox (sans association TMDB)"
           rows={inbox}
           badge="⏳"
-          badgeColor="var(--warning, #f59e0b)"
+          badgeColor={COLORS.warning}
         />
       )}
 
@@ -935,10 +970,121 @@ function DonePhase({ results }: { results: ImportFileResult[] }) {
           title="Erreurs"
           rows={errors}
           badge="✗"
-          badgeColor="var(--error)"
+          badgeColor={COLORS.error}
           showError
         />
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// ConfirmPhase (dry-run impact summary)
+// ============================================================================
+
+function ConfirmPhase({ summary }: { summary: DryRunSummary }) {
+  const actionConfig: Record<string, { label: string; color: string; badge: string }> = {
+    create: { label: "A creer", color: COLORS.success, badge: "+" },
+    update: { label: "A mettre a jour", color: COLORS.primary, badge: "↻" },
+    inbox: { label: "Vers l'Inbox", color: COLORS.warning, badge: "⏳" },
+    skip: { label: "Ignores (doublons)", color: COLORS.textMuted, badge: "—" },
+  };
+
+  return (
+    <div style={{ padding: SP.giga, maxWidth: 720, margin: "0 auto" }}>
+      <h3 style={{ margin: `0 0 ${SP.base}px`, fontSize: FONT.xl, fontWeight: WEIGHT.bold, color: COLORS.textMain }}>
+        Previsualisation de l'import
+      </h3>
+      <p style={{ margin: `0 0 ${SP.huge}px`, fontSize: FONT.md, color: COLORS.textMuted }}>
+        Voici l'impact prevu de l'import sur votre base. Verifiez avant de confirmer.
+      </p>
+
+      {/* Summary pills */}
+      <div style={{ ...flex.rowGap(SP.xl), marginBottom: SP.mega, flexWrap: "wrap" }}>
+        <SummaryPill count={summary.create} label="a creer" color={COLORS.success} />
+        <SummaryPill count={summary.update} label="a mettre a jour" color={COLORS.primary} />
+        <SummaryPill count={summary.inbox} label="vers l'Inbox" color={COLORS.warning} />
+        <SummaryPill count={summary.skip} label="ignores" color={COLORS.textMuted} />
+      </div>
+
+      {/* Per-action groups */}
+      {(["create", "update", "inbox", "skip"] as const).map((action) => {
+        const items = summary.items.filter((i) => i.action === action);
+        if (items.length === 0) return null;
+        const cfg = actionConfig[action];
+        return (
+          <div key={action} style={{ marginBottom: SP.huge }}>
+            <div
+              style={{
+                fontSize: FONT.base,
+                fontWeight: WEIGHT.semi,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                color: cfg.color,
+                marginBottom: SP.m,
+              }}
+            >
+              {cfg.label} ({items.length})
+            </div>
+            <div
+              style={{
+                background: COLORS.bgSurface,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: RADIUS.lg,
+                overflow: "hidden",
+              }}
+            >
+              {items.map((item, i) => (
+                <div
+                  key={item.file_path}
+                  style={{
+                    ...flex.row,
+                    alignItems: "flex-start",
+                    gap: SP.lg,
+                    padding: `${SP.base}px ${SP.xxl}px`,
+                    borderTop: i > 0 ? `1px solid ${COLORS.border}` : undefined,
+                  }}
+                >
+                  <span style={{ color: cfg.color, flexShrink: 0, fontWeight: WEIGHT.bold, fontSize: FONT.lg }}>
+                    {cfg.badge}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...flex.rowGap(SP.m) }}>
+                      <span style={{ fontWeight: WEIGHT.medium, color: COLORS.textMain }}>{item.title}</span>
+                      {item.entity_type && (
+                        <span style={{
+                          ...badge.base,
+                          fontSize: FONT.tiny,
+                          padding: `1px ${SP.s + 1}px`,
+                          background: item.entity_type === "movie" ? COLORS.primary : "#8B5CF6",
+                          color: "#fff",
+                        }}>
+                          {item.entity_type === "movie" ? "Film" : "Serie"}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.xs }}>
+                      {item.detail}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: FONT.xs,
+                        color: COLORS.textMuted,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        marginTop: 1,
+                      }}
+                    >
+                      {item.file_path.split(/[/\\]/).pop()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -955,17 +1101,15 @@ function SummaryPill({
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 14px",
-        borderRadius: 20,
-        background: "var(--bg-surface)",
+        ...flex.rowGap(SP.base),
+        padding: `${SP.base}px ${SP.xxl}px`,
+        borderRadius: RADIUS.full,
+        background: COLORS.bgSurface,
         border: `1px solid ${color}`,
       }}
     >
-      <span style={{ fontSize: 18, fontWeight: 700, color }}>{count}</span>
-      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{label}</span>
+      <span style={{ fontSize: FONT.xxl, fontWeight: WEIGHT.bold, color }}>{count}</span>
+      <span style={{ fontSize: FONT.md, color: COLORS.textMuted }}>{label}</span>
     </div>
   );
 }
@@ -984,24 +1128,24 @@ function ResultGroup({
   showError?: boolean;
 }) {
   return (
-    <div style={{ marginBottom: 20 }}>
+    <div style={{ marginBottom: SP.huge }}>
       <div
         style={{
-          fontSize: 12,
-          fontWeight: 600,
+          fontSize: FONT.base,
+          fontWeight: WEIGHT.semi,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
-          color: "var(--text-muted)",
-          marginBottom: 6,
+          color: COLORS.textMuted,
+          marginBottom: SP.m,
         }}
       >
         {title}
       </div>
       <div
         style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
+          background: COLORS.bgSurface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: RADIUS.lg,
           overflow: "hidden",
         }}
       >
@@ -1009,20 +1153,20 @@ function ResultGroup({
           <div
             key={r.file_path}
             style={{
-              display: "flex",
+              ...flex.row,
               alignItems: "flex-start",
-              gap: 10,
-              padding: "8px 14px",
-              borderTop: i > 0 ? "1px solid var(--border)" : undefined,
+              gap: SP.lg,
+              padding: `${SP.base}px ${SP.xxl}px`,
+              borderTop: i > 0 ? `1px solid ${COLORS.border}` : undefined,
             }}
           >
             <span style={{ color: badgeColor, flexShrink: 0 }}>{badge}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 500, color: "var(--text-main)" }}>{r.title}</div>
+              <div style={{ fontWeight: WEIGHT.medium, color: COLORS.textMain }}>{r.title}</div>
               <div
                 style={{
-                  fontSize: 11,
-                  color: "var(--text-muted)",
+                  fontSize: FONT.sm,
+                  color: COLORS.textMuted,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -1031,7 +1175,7 @@ function ResultGroup({
                 {r.file_path}
               </div>
               {showError && r.error && (
-                <div style={{ fontSize: 12, color: "var(--error)", marginTop: 2 }}>
+                <div style={{ fontSize: FONT.base, color: COLORS.error, marginTop: SP.xs }}>
                   {r.error}
                 </div>
               )}
@@ -1049,9 +1193,9 @@ function ResultGroup({
 
 function ConfidenceBadge({ value }: { value: number }) {
   const color =
-    value >= 80 ? "var(--success)" : value >= 50 ? "var(--warning, #f59e0b)" : "var(--error)";
+    value >= 80 ? COLORS.success : value >= 50 ? COLORS.warning : COLORS.error;
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, color }}>{value}%</span>
+    <span style={{ fontSize: FONT.sm, fontWeight: WEIGHT.semi, color }}>{value}%</span>
   );
 }
 
@@ -1065,13 +1209,13 @@ function Th({
   return (
     <th
       style={{
-        padding: "8px 8px",
-        fontSize: 11,
-        fontWeight: 600,
+        ...thPreset.base,
+        fontSize: FONT.sm,
+        fontWeight: WEIGHT.semi,
         textTransform: "uppercase",
         letterSpacing: "0.05em",
-        color: "var(--text-muted)",
-        textAlign: "left",
+        color: COLORS.textMuted,
+        borderBottom: "none",
         ...style,
       }}
     >
@@ -1083,43 +1227,37 @@ function Th({
 // ── Shared micro-styles ──────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
+  ...inputPreset.base,
   background: "var(--bg-main)",
-  border: "1px solid var(--border)",
-  borderRadius: 5,
-  padding: "3px 7px",
-  fontSize: 13,
-  color: "var(--text-main)",
-  outline: "none",
+  padding: `${SP.s - 1}px ${SP.base - 1}px`,
+  fontSize: FONT.md,
 };
 
 const selectStyle: React.CSSProperties = {
+  ...inputPreset.select,
   background: "var(--bg-main)",
-  border: "1px solid var(--border)",
-  borderRadius: 5,
-  padding: "3px 6px",
-  fontSize: 13,
-  color: "var(--text-main)",
+  fontSize: FONT.md,
   cursor: "pointer",
 };
 
 function btnStyle(variant: "primary" | "secondary" | "ghost"): React.CSSProperties {
   const base: React.CSSProperties = {
     border: "none",
-    borderRadius: 6,
-    padding: "6px 12px",
-    fontSize: 13,
-    fontWeight: 500,
+    borderRadius: RADIUS.md,
+    padding: `${SP.m}px ${SP.xl}px`,
+    fontSize: FONT.md,
+    fontWeight: WEIGHT.medium,
     cursor: "pointer",
-    transition: "opacity 0.1s",
+    transition: `opacity ${TRANSITION.fast}`,
   };
   if (variant === "primary")
-    return { ...base, background: "var(--color-primary)", color: "#fff" };
+    return { ...base, background: COLORS.primary, color: "#fff" };
   if (variant === "secondary")
     return {
       ...base,
-      background: "var(--bg-surface-alt)",
-      color: "var(--text-main)",
-      border: "1px solid var(--border)",
+      background: COLORS.bgSurfaceAlt,
+      color: COLORS.textMain,
+      border: `1px solid ${COLORS.border}`,
     };
-  return { ...base, background: "transparent", color: "var(--text-secondary)" };
+  return { ...base, background: "transparent", color: COLORS.textSecondary };
 }

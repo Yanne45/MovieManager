@@ -7,6 +7,7 @@ import {
   useGenres, useCreateGenre, useUpdateGenre, useDeleteGenre,
   useScoreWeights, useSetScoreWeights, useRecomputeAllScores,
 } from "../lib/hooks";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, flex, btn, card, input } from "../lib/tokens";
 
 export interface RecentDatabase {
   path: string;
@@ -53,7 +54,7 @@ export function SettingsPage({
   const [tmdbKey, setTmdbKey] = useState("");
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ flex: 1, ...flex.col, overflow: "hidden" }}>
       <TabBar
         tabs={[
           { id: "database", label: "Base de données" },
@@ -67,7 +68,7 @@ export function SettingsPage({
         active={tab}
         onChange={setTab}
       />
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: `${SP.huge}px ${SP.mega}px` }}>
         {tab === "database" && (
           <DatabaseTab
             currentName={currentDbName}
@@ -113,36 +114,22 @@ function LibrariesTab({
 }) {
   return (
     <div style={{ maxWidth: 700 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ ...flex.rowBetween, marginBottom: SP.xxxl }}>
         <SectionTitle>Sources physiques</SectionTitle>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={flex.rowGap(SP.base)}>
           <button
             onClick={onImportNfo}
             style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
+              ...btn.base,
               background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
+              color: COLORS.textSecondary,
             }}
           >
             Import NFO
           </button>
           <button
             onClick={onCreate}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--color-primary)",
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            style={btn.primary}
           >
             + Ajouter une library
           </button>
@@ -153,41 +140,37 @@ function LibrariesTab({
         <div
           key={lib.id}
           style={{
-            padding: 16,
-            marginBottom: 10,
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface)",
+            ...card.base,
+            padding: SP.xxxl,
+            marginBottom: SP.lg,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{lib.name}</span>
+          <div style={{ ...flex.rowGap(SP.lg), marginBottom: SP.base }}>
+            <span style={{ fontSize: FONT.lg, fontWeight: WEIGHT.semi }}>{lib.name}</span>
             <span
               style={{
-                fontSize: 10,
-                fontWeight: 600,
-                padding: "2px 8px",
-                borderRadius: 4,
+                fontSize: FONT.xs,
+                fontWeight: WEIGHT.semi,
+                padding: `${SP.xs}px ${SP.base}px`,
+                borderRadius: RADIUS.sm,
                 textTransform: "uppercase",
                 background:
                   lib.lib_type === "nas"
-                    ? "var(--color-primary-soft)"
-                    : "var(--bg-surface-alt)",
+                    ? COLORS.primarySoft
+                    : COLORS.bgSurfaceAlt,
                 color:
-                  lib.lib_type === "nas" ? "var(--color-primary)" : "var(--text-muted)",
+                  lib.lib_type === "nas" ? COLORS.primary : COLORS.textMuted,
               }}
             >
               {lib.lib_type}
             </span>
             <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
+                ...flex.rowGap(SP.s),
                 marginLeft: "auto",
-                fontSize: 11,
-                fontWeight: 500,
-                color: lib.is_online ? "var(--success)" : "var(--error)",
+                fontSize: FONT.sm,
+                fontWeight: WEIGHT.medium,
+                color: lib.is_online ? COLORS.success : COLORS.error,
               }}
             >
               <span style={{ fontSize: 8 }}>●</span>
@@ -196,32 +179,29 @@ function LibrariesTab({
           </div>
           <div
             style={{
-              fontSize: 12,
-              color: "var(--text-secondary)",
+              fontSize: FONT.base,
+              color: COLORS.textSecondary,
               display: "grid",
               gridTemplateColumns: "90px 1fr",
-              rowGap: 4,
+              rowGap: SP.s,
             }}
           >
-            <span style={{ color: "var(--text-muted)" }}>Chemin</span>
-            <span style={{ fontFamily: "monospace", fontSize: 11 }}>{lib.path}</span>
-            <span style={{ color: "var(--text-muted)" }}>Fichiers</span>
+            <span style={{ color: COLORS.textMuted }}>Chemin</span>
+            <span style={{ fontFamily: "monospace", fontSize: FONT.sm }}>{lib.path}</span>
+            <span style={{ color: COLORS.textMuted }}>Fichiers</span>
             <span>{lib.total_files}</span>
-            <span style={{ color: "var(--text-muted)" }}>Dernier scan</span>
+            <span style={{ color: COLORS.textMuted }}>Dernier scan</span>
             <span>{lib.last_scan || "Jamais"}</span>
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <div style={{ ...flex.rowGap(SP.base), marginTop: SP.xl }}>
             <button
               onClick={() => onScan?.(lib.id)}
               style={{
-                padding: "5px 12px",
-                borderRadius: 6,
-                border: "1px solid var(--border)",
+                ...btn.base,
+                padding: `${SP.s + 1}px ${SP.xl}px`,
                 background: "transparent",
-                color: "var(--text-secondary)",
-                fontSize: 11,
-                fontWeight: 500,
-                cursor: "pointer",
+                color: COLORS.textSecondary,
+                fontWeight: WEIGHT.medium,
               }}
             >
               Scanner
@@ -231,7 +211,7 @@ function LibrariesTab({
       ))}
 
       {libraries.length === 0 && (
-        <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+        <p style={{ color: COLORS.textMuted, fontSize: FONT.md }}>
           Aucune library configurée. Ajoutez un dossier pour commencer.
         </p>
       )}
@@ -251,25 +231,16 @@ function ApiKeysTab({
   return (
     <div style={{ maxWidth: 500 }}>
       <SectionTitle>Clés API pour le matching automatique</SectionTitle>
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: SP.xxl }}>
         <UnderlineInput label="TMDB API Key" value={tmdbKey} onChange={onChange} />
         <button
           onClick={() => onSave?.(tmdbKey)}
-          style={{
-            padding: "6px 16px",
-            borderRadius: 6,
-            border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
+          style={btn.primary}
         >
           Valider
         </button>
       </div>
-      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+      <p style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.base }}>
         Obtenez une clé API gratuite sur themoviedb.org
       </p>
     </div>
@@ -282,7 +253,7 @@ function GeneralTab() {
       {/* FFprobe status */}
       <FfprobeStatusPanel />
 
-      <div style={{ marginTop: 24 }}>
+      <div style={{ marginTop: SP.mega }}>
         <SectionTitle>Préférences</SectionTitle>
         {[
           { label: "Langue des métadonnées", desc: "Langue préférée pour titres et synopsis", value: "Français" },
@@ -293,24 +264,22 @@ function GeneralTab() {
           <div
             key={pref.label}
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "12px 0",
-              borderBottom: "1px solid var(--border)",
+              ...flex.rowBetween,
+              padding: `${SP.xl}px 0`,
+              borderBottom: `1px solid ${COLORS.border}`,
             }}
           >
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{pref.label}</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{pref.desc}</div>
+              <div style={{ fontSize: FONT.md, fontWeight: WEIGHT.medium }}>{pref.label}</div>
+              <div style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>{pref.desc}</div>
             </div>
             <span
               style={{
-                fontSize: 13,
-                color: "var(--text-secondary)",
-                padding: "4px 12px",
-                background: "var(--bg-surface-alt)",
-                borderRadius: 6,
+                fontSize: FONT.md,
+                color: COLORS.textSecondary,
+                padding: `${SP.s}px ${SP.xl}px`,
+                background: COLORS.bgSurfaceAlt,
+                borderRadius: RADIUS.md,
               }}
             >
               {pref.value}
@@ -359,22 +328,22 @@ function DatabaseTab({
       <SectionTitle>Base de données active</SectionTitle>
       <div
         style={{
-          padding: 16,
-          marginBottom: 20,
-          borderRadius: 8,
-          border: "2px solid var(--color-primary)",
-          background: "var(--bg-surface)",
+          padding: SP.xxxl,
+          marginBottom: SP.huge,
+          borderRadius: RADIUS.lg,
+          border: `2px solid ${COLORS.primary}`,
+          background: COLORS.bgSurface,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <span style={{ fontSize: 8, color: "var(--success)" }}>●</span>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>{currentName || "moviemanager"}</span>
+        <div style={{ ...flex.rowGap(SP.lg), marginBottom: SP.m }}>
+          <span style={{ fontSize: 8, color: COLORS.success }}>●</span>
+          <span style={{ fontSize: 15, fontWeight: WEIGHT.semi }}>{currentName || "moviemanager"}</span>
         </div>
         <div
           style={{
-            fontSize: 11,
+            fontSize: FONT.sm,
             fontFamily: "monospace",
-            color: "var(--text-muted)",
+            color: COLORS.textMuted,
             wordBreak: "break-all",
           }}
         >
@@ -383,33 +352,18 @@ function DatabaseTab({
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-        <button
-          onClick={onCreate}
-          style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
+      <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.mega }}>
+        <button onClick={onCreate} style={btn.primary}>
           Nouvelle base
         </button>
         <button
           onClick={() => onOpen?.("")}
           style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
+            ...btn.base,
+            padding: `${SP.base}px ${SP.xxxl}px`,
             background: "transparent",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
+            color: COLORS.textSecondary,
+            fontWeight: WEIGHT.medium,
           }}
         >
           Ouvrir un fichier .db
@@ -417,14 +371,11 @@ function DatabaseTab({
         <button
           onClick={onBackup}
           style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
+            ...btn.base,
+            padding: `${SP.base}px ${SP.xxxl}px`,
             background: "transparent",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
+            color: COLORS.textSecondary,
+            fontWeight: WEIGHT.medium,
           }}
         >
           Sauvegarder (ZIP)
@@ -432,14 +383,11 @@ function DatabaseTab({
         <button
           onClick={onExportJson}
           style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
+            ...btn.base,
+            padding: `${SP.base}px ${SP.xxxl}px`,
             background: "transparent",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
+            color: COLORS.textSecondary,
+            fontWeight: WEIGHT.medium,
           }}
         >
           Export JSON
@@ -447,14 +395,11 @@ function DatabaseTab({
         <button
           onClick={onExportCsv}
           style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
+            ...btn.base,
+            padding: `${SP.base}px ${SP.xxxl}px`,
             background: "transparent",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
+            color: COLORS.textSecondary,
+            fontWeight: WEIGHT.medium,
           }}
         >
           Export CSV
@@ -463,39 +408,37 @@ function DatabaseTab({
 
       {/* Demo data */}
       <SectionTitle>Données de test</SectionTitle>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ marginBottom: SP.mega }}>
+        <div style={flex.rowGap(SP.xl)}>
           <button
             onClick={handleSeedDemo}
             disabled={seedMutation.isPending}
             style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
+              ...btn.base,
+              padding: `${SP.base}px ${SP.xxxl}px`,
               background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: 12,
-              fontWeight: 500,
+              color: COLORS.textSecondary,
+              fontWeight: WEIGHT.medium,
               cursor: seedMutation.isPending ? "wait" : "pointer",
               opacity: seedMutation.isPending ? 0.6 : 1,
             }}
           >
             {seedMutation.isPending ? "Insertion en cours..." : "Charger données de démo"}
           </button>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          <span style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
             Insère films, séries, personnes, tags, règles, etc. pour tester toutes les pages.
           </span>
         </div>
         {seedMessage && (
           <div
             style={{
-              marginTop: 10,
-              padding: "10px 14px",
-              borderRadius: 6,
-              fontSize: 12,
+              marginTop: SP.lg,
+              padding: `${SP.lg}px ${SP.xxl}px`,
+              borderRadius: RADIUS.md,
+              fontSize: FONT.base,
               background: seedMutation.isError ? "var(--score-d-bg)" : "var(--score-a-bg)",
               color: seedMutation.isError ? "var(--score-d-text)" : "var(--score-a-text)",
-              border: `1px solid ${seedMutation.isError ? "var(--error)" : "var(--success)"}`,
+              border: `1px solid ${seedMutation.isError ? COLORS.error : COLORS.success}`,
             }}
           >
             {seedMessage}
@@ -506,9 +449,9 @@ function DatabaseTab({
       {/* Recent databases */}
       <SectionTitle>Bases récentes</SectionTitle>
       {recentDatabases.length === 0 ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune base récente</p>
+        <p style={{ fontSize: FONT.base, color: COLORS.textMuted }}>Aucune base récente</p>
       ) : (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: SP.base }}>
           {recentDatabases.map((db, i) => {
             const isActive = db.path === currentPath;
             return (
@@ -516,32 +459,30 @@ function DatabaseTab({
                 key={i}
                 onClick={() => !isActive && onOpen?.(db.path)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "10px 14px",
-                  marginBottom: 6,
-                  borderRadius: 8,
-                  border: isActive ? "1px solid var(--color-primary)" : "1px solid var(--border)",
-                  background: isActive ? "var(--color-primary-soft)" : "var(--bg-surface)",
+                  ...flex.rowGap(SP.lg),
+                  padding: `${SP.lg}px ${SP.xxl}px`,
+                  marginBottom: SP.m,
+                  borderRadius: RADIUS.lg,
+                  border: isActive ? `1px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`,
+                  background: isActive ? COLORS.primarySoft : COLORS.bgSurface,
                   cursor: isActive ? "default" : "pointer",
-                  gap: 10,
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                  <div style={{ fontSize: FONT.md, fontWeight: WEIGHT.medium }}>
                     {db.name}
                     {isActive && (
-                      <span style={{ fontSize: 10, color: "var(--color-primary)", marginLeft: 8 }}>
+                      <span style={{ fontSize: FONT.xs, color: COLORS.primary, marginLeft: SP.base }}>
                         Active
                       </span>
                     )}
                   </div>
                   <div
                     style={{
-                      fontSize: 10,
+                      fontSize: FONT.xs,
                       fontFamily: "monospace",
-                      color: "var(--text-muted)",
-                      marginTop: 2,
+                      color: COLORS.textMuted,
+                      marginTop: SP.xs,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -550,7 +491,7 @@ function DatabaseTab({
                     {db.path}
                   </div>
                 </div>
-                <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>
+                <span style={{ fontSize: FONT.xs, color: COLORS.textMuted, flexShrink: 0 }}>
                   {db.last_opened}
                 </span>
               </div>
@@ -602,39 +543,33 @@ function GenresTab() {
   };
 
   const btnStyle = (variant: "primary" | "ghost" | "danger"): React.CSSProperties => ({
-    padding: "5px 12px",
-    borderRadius: 6,
-    border: variant === "primary" ? "none" : "1px solid var(--border)",
-    background: variant === "primary" ? "var(--color-primary)" : variant === "danger" ? "transparent" : "transparent",
-    color: variant === "primary" ? "#fff" : variant === "danger" ? "var(--error)" : "var(--text-secondary)",
-    fontSize: 12,
-    fontWeight: variant === "primary" ? 600 : 500,
-    cursor: "pointer",
+    ...(variant === "primary" ? btn.primary : btn.base),
+    padding: `${SP.s + 1}px ${SP.xl}px`,
+    background: variant === "primary" ? COLORS.primary : "transparent",
+    color: variant === "primary" ? "#fff" : variant === "danger" ? COLORS.error : COLORS.textSecondary,
+    border: variant === "primary" ? "none" : `1px solid ${COLORS.border}`,
+    fontWeight: variant === "primary" ? WEIGHT.semi : WEIGHT.medium,
   });
 
   return (
     <div style={{ maxWidth: 560 }}>
       <SectionTitle>Genres disponibles</SectionTitle>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
+      <p style={{ fontSize: FONT.base, color: COLORS.textMuted, marginBottom: SP.xxxl }}>
         Liste des genres utilisés pour classifier films et séries. Modifiez ou supprimez en toute sécurité — les genres TMDB sont recréés automatiquement lors des imports.
       </p>
 
       {/* Add genre */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+      <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.huge }}>
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           placeholder="Nouveau genre…"
           style={{
+            ...input.base,
             flex: 1,
-            padding: "7px 12px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface)",
-            color: "var(--text-primary)",
-            fontSize: 13,
-            outline: "none",
+            padding: `7px ${SP.xl}px`,
+            fontSize: FONT.md,
           }}
         />
         <button
@@ -648,22 +583,20 @@ function GenresTab() {
 
       {/* Genre list */}
       {isLoading ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Chargement…</p>
+        <p style={{ fontSize: FONT.base, color: COLORS.textMuted }}>Chargement…</p>
       ) : genres.length === 0 ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun genre enregistré.</p>
+        <p style={{ fontSize: FONT.base, color: COLORS.textMuted }}>Aucun genre enregistré.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={flex.colGap(SP.s)}>
           {genres.map((g) => (
             <div
               key={g.id}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "1px solid var(--border)",
-                background: editingId === g.id ? "var(--color-primary-soft)" : "var(--bg-surface)",
+                ...flex.rowGap(SP.base),
+                padding: `${SP.base}px ${SP.xl}px`,
+                borderRadius: RADIUS.lg,
+                border: `1px solid ${COLORS.border}`,
+                background: editingId === g.id ? COLORS.primarySoft : COLORS.bgSurface,
               }}
             >
               {editingId === g.id ? (
@@ -677,14 +610,12 @@ function GenresTab() {
                       if (e.key === "Escape") setEditingId(null);
                     }}
                     style={{
+                      ...input.base,
                       flex: 1,
-                      padding: "4px 8px",
+                      padding: `${SP.s}px ${SP.base}px`,
                       borderRadius: 5,
-                      border: "1px solid var(--color-primary)",
-                      background: "var(--bg-surface)",
-                      color: "var(--text-primary)",
-                      fontSize: 13,
-                      outline: "none",
+                      border: `1px solid ${COLORS.primary}`,
+                      fontSize: FONT.md,
                     }}
                   />
                   <button onClick={confirmEdit} style={btnStyle("primary")}>OK</button>
@@ -692,9 +623,9 @@ function GenresTab() {
                 </>
               ) : (
                 <>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{g.name}</span>
+                  <span style={{ flex: 1, fontSize: FONT.md, fontWeight: WEIGHT.medium }}>{g.name}</span>
                   {g.tmdb_id && (
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>
+                    <span style={{ fontSize: FONT.xs, color: COLORS.textMuted, fontFamily: "monospace" }}>
                       TMDB #{g.tmdb_id}
                     </span>
                   )}
@@ -707,7 +638,7 @@ function GenresTab() {
         </div>
       )}
 
-      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16 }}>
+      <p style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.xxxl }}>
         {genres.length} genre{genres.length !== 1 ? "s" : ""} au total
       </p>
     </div>
@@ -763,20 +694,20 @@ function ScoreTab() {
   const handleRecompute = () => recompute.mutate();
 
   if (isLoading) {
-    return <div style={{ padding: 20, color: "var(--text-muted)", fontSize: 13 }}>Chargement…</div>;
+    return <div style={{ padding: SP.huge, color: COLORS.textMuted, fontSize: FONT.md }}>Chargement…</div>;
   }
 
   return (
     <div style={{ maxWidth: 660 }}>
       <SectionTitle>Score qualité — poids des critères</SectionTitle>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20, lineHeight: 1.6 }}>
+      <p style={{ fontSize: FONT.base, color: COLORS.textMuted, marginBottom: SP.huge, lineHeight: 1.6 }}>
         Ajustez le nombre maximum de points attribués à chaque critère. Le total des points
         s'adapte automatiquement. Les seuils de notation restent proportionnels
         (A ≥ 71 %, B ≥ 48 %, C ≥ 29 % du total maximum).
       </p>
 
       {/* Grade thresholds preview */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: SP.base, marginBottom: SP.mega, flexWrap: "wrap" }}>
         {GRADE_INFO.map((g) => {
           const minPts = Math.ceil(totalMax * g.pct / 100);
           return (
@@ -784,23 +715,23 @@ function ScoreTab() {
               key={g.grade}
               style={{
                 flex: "1 1 100px",
-                padding: "10px 12px",
-                borderRadius: 8,
+                padding: `${SP.lg}px ${SP.xl}px`,
+                borderRadius: RADIUS.lg,
                 background: g.bg,
                 border: `1px solid ${g.color}33`,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+              <div style={{ ...flex.rowGap(SP.m), marginBottom: RADIUS.sm }}>
                 <span style={{
-                  fontSize: 16, fontWeight: 700, color: g.color,
-                  width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: FONT.xl, fontWeight: WEIGHT.bold, color: g.color,
+                  width: 26, height: 26, ...flex.center,
                   borderRadius: 5, background: `${g.color}22`,
                 }}>
                   {g.grade}
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: g.color }}>{g.label}</span>
+                <span style={{ fontSize: FONT.base, fontWeight: WEIGHT.semi, color: g.color }}>{g.label}</span>
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              <div style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
                 {g.pct > 0 ? `≥ ${minPts} / ${totalMax} pts` : `< ${Math.ceil(totalMax * 0.29 / 100)} pts`}
               </div>
             </div>
@@ -809,7 +740,7 @@ function ScoreTab() {
       </div>
 
       {/* Sliders */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+      <div style={{ ...flex.colGap(SP.xl), marginBottom: SP.mega }}>
         {CRITERIA.map(({ key, label, detail }) => {
           const val = weights[key];
           const pct = totalMax > 0 ? Math.round(val / totalMax * 100) : 0;
@@ -817,27 +748,25 @@ function ScoreTab() {
             <div
               key={key}
               style={{
-                padding: "12px 16px",
-                borderRadius: 8,
-                border: "1px solid var(--border)",
-                background: "var(--bg-surface)",
+                ...card.base,
+                padding: `${SP.xl}px ${SP.xxxl}px`,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ ...flex.rowBetween, marginBottom: SP.m }}>
                 <div>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{detail}</div>
+                  <span style={{ fontSize: FONT.md, fontWeight: WEIGHT.semi }}>{label}</span>
+                  <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.xs }}>{detail}</div>
                 </div>
                 <div style={{ textAlign: "right", minWidth: 80 }}>
                   <span style={{
-                    fontSize: 18, fontWeight: 700, color: "var(--color-primary)",
+                    fontSize: FONT.xxl, fontWeight: WEIGHT.bold, color: COLORS.primary,
                   }}>{val}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>pts</span>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{pct}% du total</div>
+                  <span style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginLeft: SP.s }}>pts</span>
+                  <div style={{ fontSize: FONT.xs, color: COLORS.textMuted }}>{pct}% du total</div>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 10 }}>0</span>
+              <div style={flex.rowGap(SP.lg)}>
+                <span style={{ fontSize: FONT.xs, color: COLORS.textMuted, minWidth: SP.lg }}>0</span>
                 <input
                   type="range"
                   min={0}
@@ -846,7 +775,7 @@ function ScoreTab() {
                   onChange={(e) => handleChange(key, Number(e.target.value))}
                   style={{ flex: 1, accentColor: "var(--color-primary)" }}
                 />
-                <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 24 }}>100</span>
+                <span style={{ fontSize: FONT.xs, color: COLORS.textMuted, minWidth: SP.mega }}>100</span>
               </div>
             </div>
           );
@@ -855,30 +784,32 @@ function ScoreTab() {
 
       {/* Total indicator */}
       <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "10px 16px",
-        borderRadius: 8,
-        background: "var(--bg-surface-alt)",
-        border: "1px solid var(--border)",
-        marginBottom: 20,
+        ...flex.rowBetween,
+        padding: `${SP.lg}px ${SP.xxxl}px`,
+        borderRadius: RADIUS.lg,
+        background: COLORS.bgSurfaceAlt,
+        border: `1px solid ${COLORS.border}`,
+        marginBottom: SP.huge,
       }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Total maximum</span>
-        <span style={{ fontSize: 18, fontWeight: 700, color: "var(--color-primary)" }}>
+        <span style={{ fontSize: FONT.md, fontWeight: WEIGHT.semi }}>Total maximum</span>
+        <span style={{ fontSize: FONT.xxl, fontWeight: WEIGHT.bold, color: COLORS.primary }}>
           {totalMax} pts
         </span>
       </div>
 
       {/* Action buttons */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: SP.lg, flexWrap: "wrap" }}>
         <button
           onClick={handleReset}
           disabled={!isDirty}
           style={{
-            padding: "8px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600,
-            border: "1px solid var(--border)", background: "var(--bg-surface)",
-            color: "var(--text-secondary)", cursor: isDirty ? "pointer" : "not-allowed",
+            ...btn.base,
+            padding: `${SP.base}px ${SP.xxxl}px`,
+            fontSize: FONT.md,
+            fontWeight: WEIGHT.semi,
+            background: COLORS.bgSurface,
+            color: COLORS.textSecondary,
+            cursor: isDirty ? "pointer" : "not-allowed",
             opacity: isDirty ? 1 : 0.5,
           }}
         >
@@ -888,8 +819,9 @@ function ScoreTab() {
           onClick={handleSave}
           disabled={!isDirty || setWeights.isPending}
           style={{
-            padding: "8px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600,
-            border: "none", background: "var(--color-primary)", color: "#fff",
+            ...btn.primary,
+            padding: `${SP.base}px ${SP.xxxl}px`,
+            fontSize: FONT.md,
             cursor: isDirty && !setWeights.isPending ? "pointer" : "not-allowed",
             opacity: isDirty && !setWeights.isPending ? 1 : 0.5,
           }}
@@ -901,9 +833,14 @@ function ScoreTab() {
           disabled={recompute.isPending || isDirty}
           title={isDirty ? "Enregistrez d'abord les nouvelles valeurs" : "Recalcule tous les scores avec les poids actuels"}
           style={{
-            padding: "8px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600,
-            border: "1px solid var(--color-primary)", background: "transparent",
-            color: "var(--color-primary)", cursor: !recompute.isPending && !isDirty ? "pointer" : "not-allowed",
+            ...btn.base,
+            padding: `${SP.base}px ${SP.xxxl}px`,
+            fontSize: FONT.md,
+            fontWeight: WEIGHT.semi,
+            border: `1px solid ${COLORS.primary}`,
+            background: "transparent",
+            color: COLORS.primary,
+            cursor: !recompute.isPending && !isDirty ? "pointer" : "not-allowed",
             opacity: !recompute.isPending && !isDirty ? 1 : 0.5,
           }}
         >
@@ -912,22 +849,22 @@ function ScoreTab() {
       </div>
 
       {recompute.isSuccess && (
-        <div style={{ marginTop: 12, fontSize: 12, color: "var(--success)" }}>
+        <div style={{ marginTop: SP.xl, fontSize: FONT.base, color: COLORS.success }}>
           {recompute.data} version{(recompute.data ?? 0) > 1 ? "s" : ""} mise{(recompute.data ?? 0) > 1 ? "s" : ""} à jour.
         </div>
       )}
       {setWeights.isSuccess && !isDirty && (
-        <div style={{ marginTop: 12, fontSize: 12, color: "var(--success)" }}>
+        <div style={{ marginTop: SP.xl, fontSize: FONT.base, color: COLORS.success }}>
           Poids enregistrés. Cliquez sur "Recalculer tous les films" pour appliquer.
         </div>
       )}
       {(setWeights.isError || recompute.isError) && (
-        <div style={{ marginTop: 12, fontSize: 12, color: "var(--error, #e74c3c)" }}>
+        <div style={{ marginTop: SP.xl, fontSize: FONT.base, color: "var(--error, #e74c3c)" }}>
           Erreur : {String((setWeights.error || recompute.error) ?? "inconnu")}
         </div>
       )}
 
-      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 20, lineHeight: 1.5 }}>
+      <p style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.huge, lineHeight: 1.5 }}>
         Le score est calculé lors de l'analyse FFprobe de chaque fichier, et peut être recalculé
         à tout moment sans relancer FFprobe en utilisant les données techniques déjà stockées.
       </p>
@@ -938,13 +875,13 @@ function ScoreTab() {
 function AboutTab() {
   return (
     <div style={{ maxWidth: 400 }}>
-      <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>MovieManager</div>
-      <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>Version 0.1.0 — MVP</div>
-      <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.55, marginBottom: 16 }}>
+      <div style={{ fontSize: 22, fontWeight: WEIGHT.semi, marginBottom: SP.s }}>MovieManager</div>
+      <div style={{ fontSize: FONT.md, color: COLORS.textMuted, marginBottom: SP.xxxl }}>Version 0.1.0 — MVP</div>
+      <p style={{ fontSize: FONT.md, color: COLORS.textSecondary, lineHeight: 1.55, marginBottom: SP.xxxl }}>
         Application desktop de gestion de collection de fichiers vidéo. Cataloguez, organisez,
         enrichissez et maintenez votre collection de films et séries TV.
       </p>
-      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Tauri 2 + React + SQLite</div>
+      <div style={{ fontSize: FONT.base, color: COLORS.textMuted }}>Tauri 2 + React + SQLite</div>
     </div>
   );
 }
@@ -958,9 +895,9 @@ function FfprobeStatusPanel() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+      <div style={{ ...card.base, padding: SP.xxxl }}>
         <SectionTitle>FFprobe</SectionTitle>
-        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Vérification en cours…</p>
+        <p style={{ fontSize: FONT.base, color: COLORS.textMuted }}>Vérification en cours…</p>
       </div>
     );
   }
@@ -970,20 +907,20 @@ function FfprobeStatusPanel() {
   return (
     <div
       style={{
-        padding: 16,
-        borderRadius: 8,
-        border: available ? "1px solid var(--border)" : "2px solid var(--warning)",
-        background: available ? "var(--bg-surface)" : "var(--score-c-bg)",
+        padding: SP.xxxl,
+        borderRadius: RADIUS.lg,
+        border: available ? `1px solid ${COLORS.border}` : `2px solid ${COLORS.warning}`,
+        background: available ? COLORS.bgSurface : "var(--score-c-bg)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <div style={{ ...flex.rowGap(SP.lg), marginBottom: SP.lg }}>
         <SectionTitle>FFprobe / FFmpeg</SectionTitle>
         <span
           style={{
-            fontSize: 10,
-            fontWeight: 600,
-            padding: "2px 8px",
-            borderRadius: 4,
+            fontSize: FONT.xs,
+            fontWeight: WEIGHT.semi,
+            padding: `${SP.xs}px ${SP.base}px`,
+            borderRadius: RADIUS.sm,
             background: available ? "var(--score-a-bg)" : "var(--score-d-bg)",
             color: available ? "var(--score-a-text)" : "var(--score-d-text)",
           }}
@@ -993,65 +930,62 @@ function FfprobeStatusPanel() {
       </div>
 
       {available ? (
-        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        <div style={{ fontSize: FONT.base, color: COLORS.textSecondary }}>
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "80px 1fr",
-              rowGap: 4,
+              rowGap: SP.s,
             }}
           >
-            <span style={{ color: "var(--text-muted)" }}>Version</span>
+            <span style={{ color: COLORS.textMuted }}>Version</span>
             <span>{status?.version ?? "inconnue"}</span>
-            <span style={{ color: "var(--text-muted)" }}>Chemin</span>
-            <span style={{ fontFamily: "monospace", fontSize: 11 }}>{status?.path ?? "PATH système"}</span>
+            <span style={{ color: COLORS.textMuted }}>Chemin</span>
+            <span style={{ fontFamily: "monospace", fontSize: FONT.sm }}>{status?.path ?? "PATH système"}</span>
           </div>
-          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+          <p style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginTop: SP.base }}>
             L'analyse technique des fichiers vidéo (codec, résolution, bitrate, audio) est active.
           </p>
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-          <p style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: FONT.base, color: COLORS.textSecondary }}>
+          <p style={{ marginBottom: SP.base }}>
             FFprobe est nécessaire pour analyser les fichiers vidéo (codec, résolution, bitrate, canaux audio).
             Sans FFprobe, le scan fonctionne mais les métadonnées techniques ne seront pas extraites.
           </p>
-          <p style={{ fontWeight: 500, marginBottom: 8 }}>
+          <p style={{ fontWeight: WEIGHT.medium, marginBottom: SP.base }}>
             Installation recommandée :
           </p>
-          <div style={{ fontSize: 11, padding: "8px 12px", borderRadius: 6, background: "var(--bg-surface)", border: "1px solid var(--border)", marginBottom: 8 }}>
-            <div style={{ marginBottom: 4 }}>
-              <span style={{ fontWeight: 600 }}>Windows : </span>
-              <span style={{ color: "var(--text-muted)" }}>
+          <div style={{ fontSize: FONT.sm, padding: `${SP.base}px ${SP.xl}px`, borderRadius: RADIUS.md, background: COLORS.bgSurface, border: `1px solid ${COLORS.border}`, marginBottom: SP.base }}>
+            <div style={{ marginBottom: SP.s }}>
+              <span style={{ fontWeight: WEIGHT.semi }}>Windows : </span>
+              <span style={{ color: COLORS.textMuted }}>
                 Téléchargez FFmpeg depuis ffmpeg.org/download.html et ajoutez le dossier bin au PATH système.
               </span>
             </div>
-            <div style={{ marginBottom: 4 }}>
-              <span style={{ fontWeight: 600 }}>macOS : </span>
-              <span style={{ fontFamily: "monospace", color: "var(--text-muted)" }}>brew install ffmpeg</span>
+            <div style={{ marginBottom: SP.s }}>
+              <span style={{ fontWeight: WEIGHT.semi }}>macOS : </span>
+              <span style={{ fontFamily: "monospace", color: COLORS.textMuted }}>brew install ffmpeg</span>
             </div>
             <div>
-              <span style={{ fontWeight: 600 }}>Linux : </span>
-              <span style={{ fontFamily: "monospace", color: "var(--text-muted)" }}>sudo apt install ffmpeg</span>
+              <span style={{ fontWeight: WEIGHT.semi }}>Linux : </span>
+              <span style={{ fontFamily: "monospace", color: COLORS.textMuted }}>sudo apt install ffmpeg</span>
             </div>
           </div>
           {status?.error && (
-            <p style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>
+            <p style={{ fontSize: FONT.xs, color: COLORS.textMuted, fontFamily: "monospace" }}>
               {status.error}
             </p>
           )}
           <button
             onClick={() => refetch()}
             style={{
-              padding: "5px 14px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
+              ...btn.base,
+              padding: `${SP.s + 1}px ${SP.xxl}px`,
               background: "transparent",
-              color: "var(--text-secondary)",
-              fontSize: 11,
-              fontWeight: 500,
-              cursor: "pointer",
-              marginTop: 4,
+              color: COLORS.textSecondary,
+              fontWeight: WEIGHT.medium,
+              marginTop: SP.s,
             }}
           >
             Revérifier

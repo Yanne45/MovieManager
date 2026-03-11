@@ -21,7 +21,7 @@ pub async fn analyze_media_file(
     .fetch_optional(pool)
     .await
     .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Media file {} not found", media_file_id))?;
+    .ok_or_else(|| format!("Fichier média {} introuvable", media_file_id))?;
 
     media_analysis::analyze_and_update(pool, version_id, &file_path)
         .await

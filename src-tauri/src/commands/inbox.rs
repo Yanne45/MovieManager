@@ -65,7 +65,7 @@ pub async fn resolve_inbox_link(
     .fetch_optional(pool)
     .await
     .map_err(|e| e.to_string())?
-    .ok_or_else(|| format!("Inbox item {} not found", inbox_id))?;
+    .ok_or_else(|| format!("Élément inbox {} introuvable", inbox_id))?;
 
     let tmdb_id = entity_id;
     let mut resolved_entity_id: Option<i64> = None;
@@ -245,4 +245,166 @@ pub async fn delete_inbox_item(
         .await
         .map_err(|e| e.to_string())?;
     Ok(r.rows_affected() > 0)
+}
+
+// ============================================================================
+// Batch operations
+// ============================================================================
+
+/// Preview the impact of a batch operation before executing it
+#[tauri::command]
+pub async fn batch_preview_inbox(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<BatchPreview, String> {
+    let db = state.db();
+    let pool = db.pool();
+
+    if ids.is_empty() {
+        return Ok(BatchPreview {
+            total: 0,
+            by_status: std::collections::HashMap::new(),
+            by_category: std::collections::HashMap::new(),
+            items: vec![],
+        });
+    }
+
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        "SELECT * FROM inbox_items WHERE id IN ({})",
+        placeholders.join(",")
+    );
+
+    let mut query = sqlx::query_as::<_, InboxItem>(&sql);
+    for id in &ids {
+        query = query.bind(id);
+    }
+    let items = query.fetch_all(pool).await.map_err(|e| e.to_string())?;
+
+    let mut by_status: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut by_category: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    for item in &items {
+        *by_status.entry(item.status.clone()).or_insert(0) += 1;
+        *by_category.entry(item.category.clone()).or_insert(0) += 1;
+    }
+
+    let preview_items: Vec<BatchPreviewItem> = items
+        .iter()
+        .map(|i| BatchPreviewItem {
+            id: i.id,
+            parsed_title: i.parsed_title.clone(),
+            category: i.category.clone(),
+            status: i.status.clone(),
+        })
+        .collect();
+
+    Ok(BatchPreview {
+        total: items.len() as i64,
+        by_status,
+        by_category,
+        items: preview_items,
+    })
+}
+
+/// Ignore multiple inbox items at once
+#[tauri::command]
+pub async fn batch_ignore_inbox(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<i64, String> {
+    let db = state.db();
+    let pool = db.pool();
+
+    if ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        "UPDATE inbox_items SET status = 'ignored', resolution_note = 'ignored by user (batch)',
+         resolved_at = datetime('now'), updated_at = datetime('now')
+         WHERE id IN ({}) AND status = 'pending'",
+        placeholders.join(",")
+    );
+
+    let mut query = sqlx::query(&sql);
+    for id in &ids {
+        query = query.bind(id);
+    }
+    let r = query.execute(pool).await.map_err(|e| e.to_string())?;
+    Ok(r.rows_affected() as i64)
+}
+
+/// Reopen multiple resolved/ignored inbox items at once
+#[tauri::command]
+pub async fn batch_reopen_inbox(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<i64, String> {
+    let db = state.db();
+    let pool = db.pool();
+
+    if ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        "UPDATE inbox_items SET status = 'pending', resolved_at = NULL,
+         resolution_note = NULL, updated_at = datetime('now')
+         WHERE id IN ({}) AND status != 'pending'",
+        placeholders.join(",")
+    );
+
+    let mut query = sqlx::query(&sql);
+    for id in &ids {
+        query = query.bind(id);
+    }
+    let r = query.execute(pool).await.map_err(|e| e.to_string())?;
+    Ok(r.rows_affected() as i64)
+}
+
+/// Delete multiple inbox items at once
+#[tauri::command]
+pub async fn batch_delete_inbox(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<i64, String> {
+    let db = state.db();
+    let pool = db.pool();
+
+    if ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        "DELETE FROM inbox_items WHERE id IN ({})",
+        placeholders.join(",")
+    );
+
+    let mut query = sqlx::query(&sql);
+    for id in &ids {
+        query = query.bind(id);
+    }
+    let r = query.execute(pool).await.map_err(|e| e.to_string())?;
+    Ok(r.rows_affected() as i64)
+}
+
+// ---- Batch preview types ----
+
+#[derive(serde::Serialize, Clone)]
+pub struct BatchPreviewItem {
+    pub id: i64,
+    pub parsed_title: Option<String>,
+    pub category: String,
+    pub status: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct BatchPreview {
+    pub total: i64,
+    pub by_status: std::collections::HashMap<String, i64>,
+    pub by_category: std::collections::HashMap<String, i64>,
+    pub items: Vec<BatchPreviewItem>,
 }

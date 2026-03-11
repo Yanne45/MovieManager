@@ -1,4 +1,5 @@
 use crate::db::queries;
+use crate::modules::change_log;
 use crate::modules::ingestion::{self, ScannedFile};
 use crate::modules::pipeline::{self, ProcessingResult};
 use crate::AppState;
@@ -29,7 +30,7 @@ pub async fn scan_library(
     let library = queries::get_library(pool, library_id)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Library {} not found", library_id))?;
+        .ok_or_else(|| format!("Bibliothèque {} introuvable", library_id))?;
 
     // Scan is synchronous (filesystem walk) — run in blocking thread
     let lib_path = library.path.clone();
@@ -73,7 +74,7 @@ pub async fn scan_and_match_library(
     let library = queries::get_library(pool, library_id)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Library {} not found", library_id))?;
+        .ok_or_else(|| format!("Bibliothèque {} introuvable", library_id))?;
 
     // Step 1: Scan (blocking filesystem walk)
     let lib_path = library.path.clone();
@@ -129,13 +130,15 @@ pub async fn scan_and_match_library(
 
     match tmdb_client {
         Some(client) => {
+            let op_id = change_log::new_operation_id();
             let cache = state.image_cache.read().map_err(|e| e.to_string())?.clone();
-            let results = pipeline::process_scanned_files(
+            let results = pipeline::process_scanned_files_op(
                 pool,
                 library_id,
                 &scanned_files,
                 &client,
                 Some(&cache),
+                Some(&op_id),
             )
             .await
             .map_err(|e| e.to_string())?;
@@ -413,9 +416,10 @@ pub async fn import_files(
         .await
         .map_err(|e| e.to_string())?
         .map(|(id,)| id)
-        .unwrap_or(0);
+        .ok_or_else(|| "Aucune bibliothèque configurée — créez-en une avant d'importer".to_string())?;
 
     let mut results = Vec::new();
+    let op_id = change_log::new_operation_id();
 
     for input in files {
         let result = import_single_file(
@@ -424,6 +428,7 @@ pub async fn import_files(
             tmdb_client.as_ref(),
             default_lib_id,
             &state,
+            Some(&op_id),
         )
         .await;
 
@@ -446,6 +451,177 @@ pub async fn import_files(
     Ok(results)
 }
 
+// ============================================================================
+// Dry-run (impact preview before committing)
+// ============================================================================
+
+/// Dry-run result for a single file
+#[derive(Debug, Serialize)]
+pub struct DryRunResult {
+    pub file_path: String,
+    pub title: String,
+    /// "create", "update", "inbox", "skip"
+    pub action: String,
+    /// Human-readable explanation
+    pub detail: String,
+    /// Entity type if resolved ("movie" or "series")
+    pub entity_type: Option<String>,
+    /// Name of existing entity if "update"
+    pub existing_title: Option<String>,
+}
+
+/// Summary of a dry-run
+#[derive(Debug, Serialize)]
+pub struct DryRunSummary {
+    pub total: usize,
+    pub create: usize,
+    pub update: usize,
+    pub inbox: usize,
+    pub skip: usize,
+    pub items: Vec<DryRunResult>,
+}
+
+/// Simulate the import without writing anything to the database.
+/// For each file, determines whether it would create a new entity,
+/// add a file to an existing one, go to inbox, or be skipped.
+#[tauri::command]
+pub async fn dry_run_import(
+    state: State<'_, AppState>,
+    files: Vec<ImportFileInput>,
+) -> Result<DryRunSummary, String> {
+    let db = state.db();
+    let pool = db.pool();
+
+    let mut items = Vec::new();
+    let mut create = 0usize;
+    let mut update = 0usize;
+    let mut inbox = 0usize;
+    let mut skip = 0usize;
+
+    for input in &files {
+        // Check if file already exists in media_files
+        let already: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM media_files WHERE file_path = ?"
+        )
+        .bind(&input.file_path)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        if already.0 > 0 {
+            skip += 1;
+            items.push(DryRunResult {
+                file_path: input.file_path.clone(),
+                title: input.title.clone(),
+                action: "skip".into(),
+                detail: "Fichier deja present en base".into(),
+                entity_type: None,
+                existing_title: None,
+            });
+            continue;
+        }
+
+        if let Some(tmdb_id) = input.tmdb_id {
+            // Check if entity exists by TMDB ID
+            match input.entity_type.as_str() {
+                "movie" => {
+                    let existing: Option<(i64, String)> = sqlx::query_as(
+                        "SELECT id, title FROM movies WHERE tmdb_id = ?"
+                    )
+                    .bind(tmdb_id)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                    if let Some((_id, existing_title)) = existing {
+                        update += 1;
+                        items.push(DryRunResult {
+                            file_path: input.file_path.clone(),
+                            title: input.title.clone(),
+                            action: "update".into(),
+                            detail: format!("Ajout du fichier au film existant '{}'", existing_title),
+                            entity_type: Some("movie".into()),
+                            existing_title: Some(existing_title),
+                        });
+                    } else {
+                        create += 1;
+                        items.push(DryRunResult {
+                            file_path: input.file_path.clone(),
+                            title: input.title.clone(),
+                            action: "create".into(),
+                            detail: format!("Nouveau film '{}' (TMDB #{})", input.title, tmdb_id),
+                            entity_type: Some("movie".into()),
+                            existing_title: None,
+                        });
+                    }
+                }
+                "series" | "episode" => {
+                    let existing: Option<(i64, String)> = sqlx::query_as(
+                        "SELECT id, title FROM series WHERE tmdb_id = ?"
+                    )
+                    .bind(tmdb_id)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                    if let Some((_id, existing_title)) = existing {
+                        update += 1;
+                        items.push(DryRunResult {
+                            file_path: input.file_path.clone(),
+                            title: input.title.clone(),
+                            action: "update".into(),
+                            detail: format!("Ajout du fichier a la serie existante '{}'", existing_title),
+                            entity_type: Some("series".into()),
+                            existing_title: Some(existing_title),
+                        });
+                    } else {
+                        create += 1;
+                        items.push(DryRunResult {
+                            file_path: input.file_path.clone(),
+                            title: input.title.clone(),
+                            action: "create".into(),
+                            detail: format!("Nouvelle serie '{}' (TMDB #{})", input.title, tmdb_id),
+                            entity_type: Some("series".into()),
+                            existing_title: None,
+                        });
+                    }
+                }
+                _ => {
+                    inbox += 1;
+                    items.push(DryRunResult {
+                        file_path: input.file_path.clone(),
+                        title: input.title.clone(),
+                        action: "inbox".into(),
+                        detail: "Type d'entite inconnu — envoi vers l'inbox".into(),
+                        entity_type: None,
+                        existing_title: None,
+                    });
+                }
+            }
+        } else {
+            // No TMDB ID → goes to inbox
+            inbox += 1;
+            items.push(DryRunResult {
+                file_path: input.file_path.clone(),
+                title: input.title.clone(),
+                action: "inbox".into(),
+                detail: "Pas d'association TMDB — envoi vers l'inbox".into(),
+                entity_type: None,
+                existing_title: None,
+            });
+        }
+    }
+
+    Ok(DryRunSummary {
+        total: files.len(),
+        create,
+        update,
+        inbox,
+        skip,
+        items,
+    })
+}
+
 /// Process one file — returns "imported" or "inbox" on success, Err on failure.
 async fn import_single_file(
     pool: &sqlx::SqlitePool,
@@ -453,6 +629,7 @@ async fn import_single_file(
     tmdb_client: Option<&crate::modules::tmdb::TmdbClient>,
     default_lib_id: i64,
     state: &crate::AppState,
+    operation_id: Option<&str>,
 ) -> Result<String, String> {
     if let (Some(tmdb_id), Some(client)) = (input.tmdb_id, tmdb_client) {
         let match_result = crate::modules::tmdb::MatchResult {
@@ -465,15 +642,13 @@ async fn import_single_file(
 
         match input.entity_type.as_str() {
             "movie" => {
-                let movie = pipeline::create_or_update_movie_pub(pool, &match_result, client)
+                let movie = pipeline::create_or_update_movie_pub_op(pool, &match_result, client, operation_id)
                     .await
                     .map_err(|e| e.to_string())?;
 
-                if default_lib_id > 0 {
-                    attach_file_to_entity(
-                        pool, "movie", movie.id, &input.file_path, default_lib_id,
-                    ).await?;
-                }
+                attach_file_to_entity(
+                    pool, "movie", movie.id, &input.file_path, default_lib_id,
+                ).await?;
 
                 // Cache images best-effort
                 if let Some(cache) = state.image_cache.read().ok().map(|g| g.clone()) {
@@ -483,15 +658,13 @@ async fn import_single_file(
                 }
             }
             "series" | "episode" => {
-                let series = pipeline::find_or_create_series_pub(pool, &match_result, client)
+                let series = pipeline::find_or_create_series_pub_op(pool, &match_result, client, operation_id)
                     .await
                     .map_err(|e| e.to_string())?;
 
-                if default_lib_id > 0 {
-                    attach_file_to_series_episode(
-                        pool, series.id, &input.file_path, default_lib_id,
-                    ).await?;
-                }
+                attach_file_to_series_episode(
+                    pool, series.id, &input.file_path, default_lib_id,
+                ).await?;
 
                 if let Some(cache) = state.image_cache.read().ok().map(|g| g.clone()) {
                     let _ = crate::modules::image_cache::cache_series_images(

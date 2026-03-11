@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { SectionTitle, Tag as TagPill, EmptyState, UnderlineInput } from "../components/ui";
-import { usePersonMovies, useStudioMovies, useCollectionItems, useAddCollectionItem, useRemoveCollectionItem } from "../lib/hooks";
+import { usePersonMovies, useStudioMovies, useCollectionItems, useAddCollectionItem, useRemoveCollectionItem, useCreateSmartCollection, useSmartCollectionItems, useUpdateSmartRules } from "../lib/hooks";
 import { tmdbImageUrl } from "../lib/api";
-import type { Person, StudioFull, PersonMovieRow, StudioMovieRow } from "../lib/api";
+import type { Person, StudioFull, PersonMovieRow, StudioMovieRow, SmartRuleSet, SmartRule } from "../lib/api";
 import { SmartPoster } from "../components/SmartPoster";
+import { COLORS, SP, FONT, WEIGHT, RADIUS, SIZES, TRANSITION, flex, btn, input, panel } from "../lib/tokens";
 
 // ============================================================================
 // Re-export local types for Tags/Collections (used by App.tsx)
@@ -21,6 +22,8 @@ export interface CollectionItem {
   id: number;
   name: string;
   description: string | null;
+  is_smart?: boolean;
+  smart_rules?: string | null;
   item_count: number;
 }
 
@@ -70,14 +73,14 @@ export function ActorsPage({ actors, searchQuery, onEditPerson, initialSelectedI
   );
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div style={{ ...flex.row, height: "100%", overflow: "hidden" }}>
       {/* Grid */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: SP.huge }}>
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            gap: 12,
+            gap: SP.xl,
           }}
         >
           {filtered.map((actor) => (
@@ -86,23 +89,21 @@ export function ActorsPage({ actors, searchQuery, onEditPerson, initialSelectedI
               onClick={() => handleClick(actor)}
               onDoubleClick={() => handleDoubleClick(actor)}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 14px",
-                borderRadius: 8,
-                border: `1px solid ${selectedId === actor.id ? "var(--color-primary)" : "var(--border)"}`,
-                background: selectedId === actor.id ? "var(--bg-surface-alt)" : "var(--bg-surface)",
+                ...flex.rowGap(SP.xl),
+                padding: `${SP.xl}px ${SP.xxl}px`,
+                borderRadius: RADIUS.lg,
+                border: `1px solid ${selectedId === actor.id ? COLORS.primary : COLORS.border}`,
+                background: selectedId === actor.id ? COLORS.bgSurfaceAlt : COLORS.bgSurface,
                 cursor: "pointer",
-                transition: "border-color 0.15s, background 0.15s",
+                transition: `border-color ${TRANSITION.fast}, background ${TRANSITION.fast}`,
               }}
             >
               <PersonAvatar name={actor.name} photoPath={actor.photo_path} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 13,
-                    fontWeight: 500,
+                    fontSize: FONT.md,
+                    fontWeight: WEIGHT.medium,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -110,7 +111,7 @@ export function ActorsPage({ actors, searchQuery, onEditPerson, initialSelectedI
                 >
                   {actor.name}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                <div style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
                   {actor.primary_role || "Acteur"}
                 </div>
               </div>
@@ -123,14 +124,9 @@ export function ActorsPage({ actors, searchQuery, onEditPerson, initialSelectedI
       {/* Sliding detail panel */}
       <div
         style={{
-          width: 340,
-          flexShrink: 0,
-          borderLeft: "1px solid var(--border)",
-          background: "var(--bg-surface)",
-          overflowY: "auto",
-          marginRight: selected ? 0 : -340,
+          ...panel.container,
+          marginRight: selected ? 0 : -SIZES.detailPanelWidth,
           opacity: selected ? 1 : 0,
-          transition: "margin-right 0.25s ease, opacity 0.2s ease",
         }}
       >
         {selected && <PersonDetailPanel person={selected} onEdit={() => onEditPerson?.(selected)} onClose={() => setSelectedId(null)} />}
@@ -145,21 +141,21 @@ function PersonDetailPanel({ person, onEdit, onClose }: { person: Person; onEdit
   const { data: filmography = [] } = usePersonMovies(person.id);
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: SP.xxxl }}>
       {/* Close chevron */}
       {onClose && (
-        <div style={{ textAlign: "right", marginBottom: 4 }}>
+        <div style={{ textAlign: "right", marginBottom: SP.s }}>
           <button
             onClick={onClose}
             title="Fermer le panneau"
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text-muted)", padding: "2px 6px" }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: FONT.xl, color: COLORS.textMuted, padding: `${SP.xs}px ${SP.m}px` }}
           >
             ›
           </button>
         </div>
       )}
       {/* Photo */}
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
+      <div style={{ textAlign: "center", marginBottom: SP.xl }}>
         <SmartPoster
           entityType="person"
           entityId={person.id}
@@ -171,31 +167,31 @@ function PersonDetailPanel({ person, onEdit, onClose }: { person: Person; onEdit
       </div>
 
       {/* Name */}
-      <div style={{ textAlign: "center", fontSize: 15, fontWeight: 600, marginBottom: 2 }}>
+      <div style={{ textAlign: "center", fontSize: 15, fontWeight: WEIGHT.semi, marginBottom: SP.xs }}>
         {person.name}
       </div>
-      <div style={{ textAlign: "center", fontSize: 10, color: "var(--text-muted)", marginBottom: 12 }}>
+      <div style={{ textAlign: "center", fontSize: FONT.xs, color: COLORS.textMuted, marginBottom: SP.xl }}>
         {person.primary_role || "Acteur"}
       </div>
 
       {/* Info fields */}
-      <div style={{ fontSize: 10, color: "var(--text-secondary)", marginBottom: 12 }}>
+      <div style={{ fontSize: FONT.xs, color: COLORS.textSecondary, marginBottom: SP.xl }}>
         {person.birth_date && (
-          <div style={{ marginBottom: 4 }}>
-            <span style={{ fontSize: 9, color: "var(--text-muted)" }}>Né(e) le </span>
+          <div style={{ marginBottom: SP.s }}>
+            <span style={{ fontSize: FONT.tiny, color: COLORS.textMuted }}>Né(e) le </span>
             {person.birth_date}
             {person.birth_place && <span> — {person.birth_place}</span>}
           </div>
         )}
         {person.death_date && (
-          <div style={{ marginBottom: 4 }}>
-            <span style={{ fontSize: 9, color: "var(--text-muted)" }}>Décédé(e) le </span>
+          <div style={{ marginBottom: SP.s }}>
+            <span style={{ fontSize: FONT.tiny, color: COLORS.textMuted }}>Décédé(e) le </span>
             {person.death_date}
           </div>
         )}
         {person.known_for && (
-          <div style={{ marginBottom: 4 }}>
-            <span style={{ fontSize: 9, color: "var(--text-muted)" }}>Connu(e) pour </span>
+          <div style={{ marginBottom: SP.s }}>
+            <span style={{ fontSize: FONT.tiny, color: COLORS.textMuted }}>Connu(e) pour </span>
             {person.known_for}
           </div>
         )}
@@ -203,9 +199,9 @@ function PersonDetailPanel({ person, onEdit, onClose }: { person: Person; onEdit
 
       {/* Biography */}
       {person.biography && (
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: SP.xl }}>
           <SectionTitle>Biographie</SectionTitle>
-          <p style={{ fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.5, marginTop: 4 }}>
+          <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary, lineHeight: 1.5, marginTop: SP.s }}>
             {person.biography.length > 400 ? person.biography.slice(0, 400) + "…" : person.biography}
           </p>
         </div>
@@ -215,10 +211,10 @@ function PersonDetailPanel({ person, onEdit, onClose }: { person: Person; onEdit
       <SectionTitle>Filmographie ({filmography.length})</SectionTitle>
       <div
         style={{
-          marginTop: 6,
+          marginTop: SP.m,
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 6,
+          gap: SP.m,
         }}
       >
         {filmography.map((m, i) => (
@@ -226,22 +222,17 @@ function PersonDetailPanel({ person, onEdit, onClose }: { person: Person; onEdit
         ))}
       </div>
       {filmography.length === 0 && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Aucun film associé</div>
+        <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginTop: SP.s }}>Aucun film associé</div>
       )}
 
       {/* Edit button */}
-      <div style={{ textAlign: "center", marginTop: 16 }}>
+      <div style={{ textAlign: "center", marginTop: SP.xxxl }}>
         <button
           onClick={onEdit}
           style={{
-            padding: "6px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface-alt)",
-            color: "var(--text-main)",
-            fontSize: 11,
-            fontWeight: 500,
-            cursor: "pointer",
+            ...btn.base,
+            background: COLORS.bgSurfaceAlt,
+            color: COLORS.textMain,
           }}
         >
           Modifier
@@ -260,24 +251,22 @@ function FilmographyRow({ movie }: { movie: PersonMovieRow }) {
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: 4,
-        borderRadius: 4,
-        background: "var(--bg-surface-alt)",
+        ...flex.rowGap(SP.m),
+        padding: SP.s,
+        borderRadius: RADIUS.sm,
+        background: COLORS.bgSurfaceAlt,
       }}
     >
       {posterUrl ? (
-        <img src={posterUrl} alt="" style={{ width: 24, height: 36, objectFit: "cover", borderRadius: 2 }} />
+        <img src={posterUrl} alt="" style={{ width: 24, height: 36, objectFit: "cover", borderRadius: SP.xs }} />
       ) : (
-        <div style={{ width: 24, height: 36, borderRadius: 2, background: "var(--border)" }} />
+        <div style={{ width: 24, height: 36, borderRadius: SP.xs, background: COLORS.border }} />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: FONT.xs, fontWeight: WEIGHT.medium, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {movie.title}
         </div>
-        <div style={{ fontSize: 8, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: 8, color: COLORS.textMuted }}>
           {movie.year ?? "—"} {roleLabel}
         </div>
       </div>
@@ -292,16 +281,14 @@ function PersonAvatar({ name, photoPath, size }: { name: string; photoPath: stri
   return (
     <div
       style={{
+        ...flex.center,
         width: size,
         height: size,
         borderRadius: size / 2,
-        background: "var(--bg-surface-alt)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        background: COLORS.bgSurfaceAlt,
         fontSize: size * 0.35,
-        fontWeight: 600,
-        color: "var(--text-muted)",
+        fontWeight: WEIGHT.semi,
+        color: COLORS.textMuted,
         flexShrink: 0,
         overflow: "hidden",
       }}
@@ -351,14 +338,14 @@ export function StudiosPage({ studios, searchQuery, onEditStudio }: StudiosPageP
   );
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div style={{ ...flex.row, height: "100%", overflow: "hidden" }}>
       {/* Grid */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: SP.huge }}>
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-            gap: 12,
+            gap: SP.xl,
           }}
         >
           {filtered.map((studio) => (
@@ -367,16 +354,16 @@ export function StudiosPage({ studios, searchQuery, onEditStudio }: StudiosPageP
               onClick={() => handleClick(studio)}
               onDoubleClick={() => handleDoubleClick(studio)}
               style={{
-                padding: "14px 16px",
-                borderRadius: 8,
-                border: `1px solid ${selectedId === studio.id ? "var(--color-primary)" : "var(--border)"}`,
-                background: selectedId === studio.id ? "var(--bg-surface-alt)" : "var(--bg-surface)",
+                padding: `${SP.xxl}px ${SP.xxxl}px`,
+                borderRadius: RADIUS.lg,
+                border: `1px solid ${selectedId === studio.id ? COLORS.primary : COLORS.border}`,
+                background: selectedId === studio.id ? COLORS.bgSurfaceAlt : COLORS.bgSurface,
                 cursor: "pointer",
-                transition: "border-color 0.15s, background 0.15s",
+                transition: `border-color ${TRANSITION.fast}, background ${TRANSITION.fast}`,
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{studio.name}</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              <div style={{ fontSize: FONT.lg, fontWeight: WEIGHT.medium, marginBottom: SP.s }}>{studio.name}</div>
+              <div style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
                 {[studio.country].filter(Boolean).join(" · ") || "—"}
               </div>
             </div>
@@ -388,14 +375,9 @@ export function StudiosPage({ studios, searchQuery, onEditStudio }: StudiosPageP
       {/* Sliding detail panel */}
       <div
         style={{
-          width: 340,
-          flexShrink: 0,
-          borderLeft: "1px solid var(--border)",
-          background: "var(--bg-surface)",
-          overflowY: "auto",
-          marginRight: selected ? 0 : -340,
+          ...panel.container,
+          marginRight: selected ? 0 : -SIZES.detailPanelWidth,
           opacity: selected ? 1 : 0,
-          transition: "margin-right 0.25s ease, opacity 0.2s ease",
         }}
       >
         {selected && <StudioDetailPanel studio={selected} onEdit={() => onEditStudio?.(selected)} onClose={() => setSelectedId(null)} />}
@@ -410,21 +392,21 @@ function StudioDetailPanel({ studio, onEdit, onClose }: { studio: StudioFull; on
   const { data: movies = [] } = useStudioMovies(studio.id);
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: SP.xxxl }}>
       {/* Close chevron */}
       {onClose && (
-        <div style={{ textAlign: "right", marginBottom: 4 }}>
+        <div style={{ textAlign: "right", marginBottom: SP.s }}>
           <button
             onClick={onClose}
             title="Fermer le panneau"
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text-muted)", padding: "2px 6px" }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: FONT.xl, color: COLORS.textMuted, padding: `${SP.xs}px ${SP.m}px` }}
           >
             ›
           </button>
         </div>
       )}
       {/* Logo / Name */}
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
+      <div style={{ textAlign: "center", marginBottom: SP.xl }}>
         <SmartPoster
           entityType="studio"
           entityId={studio.id}
@@ -435,10 +417,10 @@ function StudioDetailPanel({ studio, onEdit, onClose }: { studio: StudioFull; on
         />
       </div>
 
-      <div style={{ textAlign: "center", fontSize: 15, fontWeight: 600, marginBottom: 2 }}>
+      <div style={{ textAlign: "center", fontSize: 15, fontWeight: WEIGHT.semi, marginBottom: SP.xs }}>
         {studio.name}
       </div>
-      <div style={{ textAlign: "center", fontSize: 10, color: "var(--text-muted)", marginBottom: 12 }}>
+      <div style={{ textAlign: "center", fontSize: FONT.xs, color: COLORS.textMuted, marginBottom: SP.xl }}>
         {[studio.country, studio.founded_date ? `Fondé en ${studio.founded_date}` : null]
           .filter(Boolean)
           .join(" · ") || "—"}
@@ -446,9 +428,9 @@ function StudioDetailPanel({ studio, onEdit, onClose }: { studio: StudioFull; on
 
       {/* Description */}
       {studio.description && (
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: SP.xl }}>
           <SectionTitle>Description</SectionTitle>
-          <p style={{ fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.5, marginTop: 4 }}>
+          <p style={{ fontSize: FONT.xs, color: COLORS.textSecondary, lineHeight: 1.5, marginTop: SP.s }}>
             {studio.description.length > 400 ? studio.description.slice(0, 400) + "…" : studio.description}
           </p>
         </div>
@@ -458,10 +440,10 @@ function StudioDetailPanel({ studio, onEdit, onClose }: { studio: StudioFull; on
       <SectionTitle>Films ({movies.length})</SectionTitle>
       <div
         style={{
-          marginTop: 6,
+          marginTop: SP.m,
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 6,
+          gap: SP.m,
         }}
       >
         {movies.map((m) => (
@@ -469,22 +451,17 @@ function StudioDetailPanel({ studio, onEdit, onClose }: { studio: StudioFull; on
         ))}
       </div>
       {movies.length === 0 && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Aucun film associé</div>
+        <div style={{ fontSize: FONT.xs, color: COLORS.textMuted, marginTop: SP.s }}>Aucun film associé</div>
       )}
 
       {/* Edit button */}
-      <div style={{ textAlign: "center", marginTop: 16 }}>
+      <div style={{ textAlign: "center", marginTop: SP.xxxl }}>
         <button
           onClick={onEdit}
           style={{
-            padding: "6px 16px",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            background: "var(--bg-surface-alt)",
-            color: "var(--text-main)",
-            fontSize: 11,
-            fontWeight: 500,
-            cursor: "pointer",
+            ...btn.base,
+            background: COLORS.bgSurfaceAlt,
+            color: COLORS.textMain,
           }}
         >
           Modifier
@@ -499,24 +476,22 @@ function StudioFilmRow({ movie }: { movie: StudioMovieRow }) {
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: 4,
-        borderRadius: 4,
-        background: "var(--bg-surface-alt)",
+        ...flex.rowGap(SP.m),
+        padding: SP.s,
+        borderRadius: RADIUS.sm,
+        background: COLORS.bgSurfaceAlt,
       }}
     >
       {posterUrl ? (
-        <img src={posterUrl} alt="" style={{ width: 24, height: 36, objectFit: "cover", borderRadius: 2 }} />
+        <img src={posterUrl} alt="" style={{ width: 24, height: 36, objectFit: "cover", borderRadius: SP.xs }} />
       ) : (
-        <div style={{ width: 24, height: 36, borderRadius: 2, background: "var(--border)" }} />
+        <div style={{ width: 24, height: 36, borderRadius: SP.xs, background: COLORS.border }} />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: FONT.xs, fontWeight: WEIGHT.medium, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {movie.title}
         </div>
-        <div style={{ fontSize: 8, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: 8, color: COLORS.textMuted }}>
           {movie.year ?? "—"}
         </div>
       </div>
@@ -548,24 +523,17 @@ export function TagsPage({ tags, onCreateTag, onDeleteTag }: TagsPageProps) {
   const auto = tags.filter((t) => t.auto_generated);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 600 }}>
+    <div style={{ flex: 1, overflowY: "auto", padding: SP.huge, maxWidth: 600 }}>
       {/* Create tag */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: SP.base, marginBottom: SP.huge, alignItems: "flex-end" }}>
         <div style={{ flex: 1 }}>
           <UnderlineInput label="Nouveau tag" value={newTagName} onChange={setNewTagName} />
         </div>
         <button
           onClick={handleCreate}
           style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-            marginBottom: 16,
+            ...btn.primary,
+            marginBottom: SP.xxxl,
           }}
         >
           Créer
@@ -574,7 +542,7 @@ export function TagsPage({ tags, onCreateTag, onDeleteTag }: TagsPageProps) {
 
       {/* Manual tags */}
       <SectionTitle>Tags manuels ({manual.length})</SectionTitle>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20, marginTop: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: SP.base, marginBottom: SP.huge, marginTop: SP.base }}>
         {manual.map((t) => (
           <TagPill
             key={t.id}
@@ -584,13 +552,13 @@ export function TagsPage({ tags, onCreateTag, onDeleteTag }: TagsPageProps) {
           />
         ))}
         {manual.length === 0 && (
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun tag manuel</span>
+          <span style={{ fontSize: FONT.base, color: COLORS.textMuted }}>Aucun tag manuel</span>
         )}
       </div>
 
       {/* Auto tags */}
       <SectionTitle>Tags automatiques ({auto.length})</SectionTitle>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: SP.base, marginTop: SP.base }}>
         {auto.map((t) => (
           <TagPill
             key={t.id}
@@ -599,7 +567,7 @@ export function TagsPage({ tags, onCreateTag, onDeleteTag }: TagsPageProps) {
           />
         ))}
         {auto.length === 0 && (
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <span style={{ fontSize: FONT.base, color: COLORS.textMuted }}>
             Aucun tag automatique — configurez des règles dans Paramètres
           </span>
         )}
@@ -616,6 +584,8 @@ interface CollectionsPageProps {
   collections: CollectionItem[];
   movieIndex?: Record<number, string>;
   seriesIndex?: Record<number, string>;
+  tags?: { id: number; name: string; color: string | null }[];
+  genres?: { id: number; name: string }[];
   onCreateCollection?: (name: string, description?: string) => void;
   onDeleteCollection?: (id: number) => void;
 }
@@ -624,13 +594,21 @@ export function CollectionsPage({
   collections,
   movieIndex = {},
   seriesIndex = {},
+  tags = [],
+  genres = [],
   onCreateCollection,
   onDeleteCollection,
 }: CollectionsPageProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState<false | "manual" | "smart">(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+
+  // Smart collection creation state
+  const [smartMatchMode, setSmartMatchMode] = useState<"all" | "any">("all");
+  const [smartEntityType, setSmartEntityType] = useState<"" | "movie" | "series">("");
+  const [smartRules, setSmartRules] = useState<SmartRule[]>([{ field: "year", op: "gte", value: 2000 }]);
+  const createSmart = useCreateSmartCollection();
 
   const addItem = useAddCollectionItem();
   const removeItem = useRemoveCollectionItem();
@@ -647,74 +625,173 @@ export function CollectionsPage({
   const handleCreate = () => {
     if (!newName.trim()) return;
     onCreateCollection?.(newName.trim(), newDesc.trim() || undefined);
-    setNewName("");
-    setNewDesc("");
-    setShowCreate(false);
+    resetCreateForm();
   };
 
-  const handleCancelCreate = () => {
+  const handleCreateSmart = () => {
+    if (!newName.trim() || smartRules.length === 0) return;
+    const ruleSet: SmartRuleSet = {
+      match: smartMatchMode,
+      rules: smartRules,
+      entity_type: smartEntityType || null,
+    };
+    createSmart.mutate({
+      name: newName.trim(),
+      description: newDesc.trim() || undefined,
+      smartRules: JSON.stringify(ruleSet),
+    });
+    resetCreateForm();
+  };
+
+  const resetCreateForm = () => {
     setShowCreate(false);
     setNewName("");
     setNewDesc("");
+    setSmartMatchMode("all");
+    setSmartEntityType("");
+    setSmartRules([{ field: "year", op: "gte", value: 2000 }]);
   };
 
   const btnStyle = {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "none",
-    background: "var(--color-primary)",
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
+    ...btn.primary,
+    padding: `${SP.m}px ${SP.xxl}px`,
   } as const;
 
   const btnSecondaryStyle = {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--bg-surface-alt)",
-    color: "var(--text-main)",
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: "pointer",
+    ...btn.base,
+    background: COLORS.bgSurfaceAlt,
+    color: COLORS.textMain,
   } as const;
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div style={{ ...flex.row, height: "100%", overflow: "hidden" }}>
       {/* Left: grid */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: SP.huge }}>
+        <div style={{ ...flex.rowBetween, marginBottom: SP.xxxl }}>
           <SectionTitle>Collections ({collections.length})</SectionTitle>
-          <button style={btnStyle} onClick={() => setShowCreate((v) => !v)}>
-            + Nouvelle collection
-          </button>
+          <div style={{ ...flex.rowGap(SP.base) }}>
+            <button style={btnStyle} onClick={() => setShowCreate(showCreate === "manual" ? false : "manual")}>
+              + Collection
+            </button>
+            <button
+              style={{ ...btnStyle, background: "#8B5CF6" }}
+              onClick={() => setShowCreate(showCreate === "smart" ? false : "smart")}
+            >
+              + Smart Collection
+            </button>
+          </div>
         </div>
 
-        {/* Inline create form */}
-        {showCreate && (
+        {/* Inline create form — manual */}
+        {showCreate === "manual" && (
           <div
             style={{
-              marginBottom: 16,
-              padding: 16,
-              border: "1px solid var(--color-primary)",
-              borderRadius: 8,
-              background: "var(--bg-surface)",
+              marginBottom: SP.xxxl,
+              padding: SP.xxxl,
+              border: `1px solid ${COLORS.primary}`,
+              borderRadius: RADIUS.lg,
+              background: COLORS.bgSurface,
             }}
           >
-            <div style={{ marginBottom: 10 }}>
+            <div style={{ marginBottom: SP.lg }}>
               <UnderlineInput label="Nom *" value={newName} onChange={setNewName} />
             </div>
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: SP.xl }}>
               <UnderlineInput label="Description (optionnel)" value={newDesc} onChange={setNewDesc} />
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={btnStyle} onClick={handleCreate}>
-                Créer
+            <div style={{ ...flex.rowGap(SP.base) }}>
+              <button style={btnStyle} onClick={handleCreate}>Creer</button>
+              <button style={btnSecondaryStyle} onClick={resetCreateForm}>Annuler</button>
+            </div>
+          </div>
+        )}
+
+        {/* Inline create form — smart */}
+        {showCreate === "smart" && (
+          <div
+            style={{
+              marginBottom: SP.xxxl,
+              padding: SP.xxxl,
+              border: "1px solid #8B5CF6",
+              borderRadius: RADIUS.lg,
+              background: COLORS.bgSurface,
+            }}
+          >
+            <div style={{ marginBottom: SP.lg }}>
+              <UnderlineInput label="Nom *" value={newName} onChange={setNewName} />
+            </div>
+            <div style={{ marginBottom: SP.xl }}>
+              <UnderlineInput label="Description (optionnel)" value={newDesc} onChange={setNewDesc} />
+            </div>
+
+            {/* Match mode + entity type */}
+            <div style={{ ...flex.rowGap(SP.xl), marginBottom: SP.xl }}>
+              <label style={{ fontSize: FONT.sm, color: COLORS.textSecondary }}>Correspondance :</label>
+              <select
+                value={smartMatchMode}
+                onChange={(e) => setSmartMatchMode(e.target.value as "all" | "any")}
+                style={selectStyle}
+              >
+                <option value="all">Toutes les regles (ET)</option>
+                <option value="any">Au moins une (OU)</option>
+              </select>
+              <label style={{ fontSize: FONT.sm, color: COLORS.textSecondary, marginLeft: SP.base }}>Type :</label>
+              <select
+                value={smartEntityType}
+                onChange={(e) => setSmartEntityType(e.target.value as "" | "movie" | "series")}
+                style={selectStyle}
+              >
+                <option value="">Films + Series</option>
+                <option value="movie">Films uniquement</option>
+                <option value="series">Series uniquement</option>
+              </select>
+            </div>
+
+            {/* Rules editor */}
+            <div style={{ marginBottom: SP.xl }}>
+              <div style={{ fontSize: FONT.sm, fontWeight: WEIGHT.semi, color: COLORS.textSecondary, marginBottom: SP.m }}>
+                Regles
+              </div>
+              {smartRules.map((rule, idx) => (
+                <SmartRuleRow
+                  key={idx}
+                  rule={rule}
+                  tags={tags}
+                  genres={genres}
+                  onChange={(updated) => {
+                    const next = [...smartRules];
+                    next[idx] = updated;
+                    setSmartRules(next);
+                  }}
+                  onRemove={() => setSmartRules(smartRules.filter((_, i) => i !== idx))}
+                />
+              ))}
+              <button
+                onClick={() => setSmartRules([...smartRules, { field: "year", op: "gte", value: 2000 }])}
+                style={{
+                  padding: `${SP.xs}px ${SP.lg}px`,
+                  borderRadius: RADIUS.sm,
+                  border: `1px dashed ${COLORS.border}`,
+                  background: "transparent",
+                  color: COLORS.textMuted,
+                  fontSize: FONT.sm,
+                  cursor: "pointer",
+                  marginTop: SP.s,
+                }}
+              >
+                + Ajouter une regle
               </button>
-              <button style={btnSecondaryStyle} onClick={handleCancelCreate}>
-                Annuler
+            </div>
+
+            <div style={{ ...flex.rowGap(SP.base) }}>
+              <button
+                style={{ ...btnStyle, background: "#8B5CF6" }}
+                onClick={handleCreateSmart}
+                disabled={!newName.trim() || smartRules.length === 0}
+              >
+                Creer Smart Collection
               </button>
+              <button style={btnSecondaryStyle} onClick={resetCreateForm}>Annuler</button>
             </div>
           </div>
         )}
@@ -724,7 +801,7 @@ export function CollectionsPage({
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-            gap: 12,
+            gap: SP.xl,
           }}
         >
           {collections.map((c) => (
@@ -732,46 +809,55 @@ export function CollectionsPage({
               key={c.id}
               onClick={() => handleClick(c)}
               style={{
-                padding: 16,
-                borderRadius: 8,
-                border: `1px solid ${selectedId === c.id ? "var(--color-primary)" : "var(--border)"}`,
-                background: selectedId === c.id ? "var(--bg-surface-alt)" : "var(--bg-surface)",
+                padding: SP.xxxl,
+                borderRadius: RADIUS.lg,
+                border: `1px solid ${selectedId === c.id ? COLORS.primary : COLORS.border}`,
+                background: selectedId === c.id ? COLORS.bgSurfaceAlt : COLORS.bgSurface,
                 cursor: "pointer",
-                transition: "border-color 0.15s, background 0.15s",
+                transition: `border-color ${TRANSITION.fast}, background ${TRANSITION.fast}`,
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
+              <div style={{ ...flex.rowGap(SP.m), marginBottom: SP.s }}>
+                <div style={{ fontSize: FONT.lg, fontWeight: WEIGHT.semi }}>{c.name}</div>
+                {c.is_smart && (
+                  <span style={{
+                    fontSize: FONT.tiny,
+                    padding: `1px ${SP.m}px`,
+                    borderRadius: RADIUS.sm,
+                    background: "#8B5CF6",
+                    color: "#fff",
+                    fontWeight: WEIGHT.semi,
+                  }}>
+                    SMART
+                  </span>
+                )}
+              </div>
               {c.description && (
-                <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, lineHeight: 1.4 }}>
+                <p style={{ fontSize: FONT.base, color: COLORS.textSecondary, marginBottom: SP.m, lineHeight: 1.4 }}>
                   {c.description}
                 </p>
               )}
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                {c.item_count} élément{c.item_count !== 1 ? "s" : ""}
+              <div style={{ fontSize: FONT.sm, color: COLORS.textMuted }}>
+                {c.is_smart ? "Dynamique" : `${c.item_count} element${c.item_count !== 1 ? "s" : ""}`}
               </div>
             </div>
           ))}
         </div>
 
         {collections.length === 0 && !showCreate && (
-          <EmptyState message="Aucune collection — créez-en une pour organiser votre catalogue" />
+          <EmptyState message="Aucune collection — creez-en une pour organiser votre catalogue" />
         )}
       </div>
 
       {/* Right: sliding detail panel */}
       <div
         style={{
-          width: 340,
-          flexShrink: 0,
-          borderLeft: "1px solid var(--border)",
-          background: "var(--bg-surface)",
-          overflowY: "auto",
-          marginRight: selected ? 0 : -340,
+          ...panel.container,
+          marginRight: selected ? 0 : -SIZES.detailPanelWidth,
           opacity: selected ? 1 : 0,
-          transition: "margin-right 0.25s ease, opacity 0.2s ease",
         }}
       >
-        {selected && (
+        {selected && !selected.is_smart && (
           <CollectionDetailPanel
             collection={selected}
             movieIndex={movieIndex}
@@ -786,7 +872,413 @@ export function CollectionsPage({
             onDelete={onDeleteCollection ? () => { onDeleteCollection(selected.id); setSelectedId(null); } : undefined}
           />
         )}
+        {selected && selected.is_smart && (
+          <SmartCollectionDetailPanel
+            collection={selected}
+            tags={tags}
+            genres={genres}
+            onClose={() => setSelectedId(null)}
+            onDelete={onDeleteCollection ? () => { onDeleteCollection(selected.id); setSelectedId(null); } : undefined}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── Smart rule helpers ──
+
+const selectStyle: React.CSSProperties = {
+  ...input.select,
+};
+
+const SMART_FIELDS = [
+  { value: "year", label: "Annee" },
+  { value: "tag", label: "Tag" },
+  { value: "genre", label: "Genre" },
+  { value: "score", label: "Score qualite" },
+  { value: "owned", label: "Possede" },
+  { value: "content_rating", label: "Classification" },
+  { value: "title", label: "Titre (contient)" },
+  { value: "status", label: "Statut serie" },
+];
+
+const OPS_BY_FIELD: Record<string, { value: string; label: string }[]> = {
+  year: [
+    { value: "eq", label: "=" },
+    { value: "gte", label: ">=" },
+    { value: "lte", label: "<=" },
+    { value: "gt", label: ">" },
+    { value: "lt", label: "<" },
+  ],
+  score: [
+    { value: "eq", label: "=" },
+    { value: "gte", label: ">=" },
+    { value: "lte", label: "<=" },
+  ],
+  tag: [
+    { value: "has", label: "a le tag" },
+    { value: "not_has", label: "n'a pas le tag" },
+  ],
+  genre: [
+    { value: "has", label: "a le genre" },
+    { value: "not_has", label: "n'a pas le genre" },
+  ],
+  owned: [
+    { value: "eq", label: "est" },
+  ],
+  content_rating: [
+    { value: "eq", label: "=" },
+    { value: "neq", label: "!=" },
+  ],
+  title: [
+    { value: "contains", label: "contient" },
+  ],
+  status: [
+    { value: "eq", label: "=" },
+    { value: "neq", label: "!=" },
+  ],
+};
+
+function SmartRuleRow({
+  rule,
+  tags,
+  genres,
+  onChange,
+  onRemove,
+}: {
+  rule: SmartRule;
+  tags: { id: number; name: string; color: string | null }[];
+  genres: { id: number; name: string }[];
+  onChange: (updated: SmartRule) => void;
+  onRemove: () => void;
+}) {
+  const ops = OPS_BY_FIELD[rule.field] || OPS_BY_FIELD.year;
+
+  const handleFieldChange = (field: string) => {
+    const defaultOps = OPS_BY_FIELD[field] || OPS_BY_FIELD.year;
+    let defaultValue: SmartRule["value"] = "";
+    if (field === "year") defaultValue = 2000;
+    else if (field === "owned") defaultValue = true;
+    else if (field === "tag") defaultValue = tags[0]?.id ?? 0;
+    else if (field === "genre") defaultValue = genres[0]?.id ?? 0;
+    else if (field === "score") defaultValue = "A";
+    onChange({ field, op: defaultOps[0].value, value: defaultValue });
+  };
+
+  return (
+    <div style={{ ...flex.rowGap(SP.m), marginBottom: SP.m }}>
+      {/* Field */}
+      <select value={rule.field} onChange={(e) => handleFieldChange(e.target.value)} style={selectStyle}>
+        {SMART_FIELDS.map((f) => (
+          <option key={f.value} value={f.value}>{f.label}</option>
+        ))}
+      </select>
+
+      {/* Operator */}
+      <select
+        value={rule.op}
+        onChange={(e) => onChange({ ...rule, op: e.target.value })}
+        style={selectStyle}
+      >
+        {ops.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+
+      {/* Value */}
+      {rule.field === "tag" ? (
+        <select
+          value={typeof rule.value === "number" ? rule.value : 0}
+          onChange={(e) => onChange({ ...rule, value: Number(e.target.value) })}
+          style={{ ...selectStyle, flex: 1 }}
+        >
+          {tags.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      ) : rule.field === "genre" ? (
+        <select
+          value={typeof rule.value === "number" ? rule.value : 0}
+          onChange={(e) => onChange({ ...rule, value: Number(e.target.value) })}
+          style={{ ...selectStyle, flex: 1 }}
+        >
+          {genres.map((g) => (
+            <option key={g.id} value={g.id}>{g.name}</option>
+          ))}
+        </select>
+      ) : rule.field === "owned" ? (
+        <select
+          value={rule.value === true || rule.value === "true" ? "true" : "false"}
+          onChange={(e) => onChange({ ...rule, value: e.target.value === "true" })}
+          style={selectStyle}
+        >
+          <option value="true">Oui</option>
+          <option value="false">Non</option>
+        </select>
+      ) : rule.field === "score" ? (
+        <select
+          value={String(rule.value)}
+          onChange={(e) => onChange({ ...rule, value: e.target.value })}
+          style={selectStyle}
+        >
+          {["A", "B", "C", "D", "F"].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      ) : rule.field === "status" ? (
+        <select
+          value={String(rule.value)}
+          onChange={(e) => onChange({ ...rule, value: e.target.value })}
+          style={selectStyle}
+        >
+          {["Returning Series", "Ended", "Canceled", "In Production", "Planned"].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type={rule.field === "year" ? "number" : "text"}
+          value={String(rule.value)}
+          onChange={(e) => onChange({ ...rule, value: rule.field === "year" ? Number(e.target.value) : e.target.value })}
+          style={{ ...selectStyle, flex: 1, minWidth: 60 }}
+        />
+      )}
+
+      {/* Remove */}
+      <button
+        onClick={onRemove}
+        style={{
+          ...btn.ghost,
+          padding: `0 ${SP.s}px`,
+          fontSize: FONT.lg,
+          color: COLORS.textMuted,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ── Smart Collection Detail Panel ──
+
+function SmartCollectionDetailPanel({
+  collection,
+  tags,
+  genres,
+  onClose,
+  onDelete,
+}: {
+  collection: CollectionItem;
+  tags: { id: number; name: string; color: string | null }[];
+  genres: { id: number; name: string }[];
+  onClose?: () => void;
+  onDelete?: () => void;
+}) {
+  const { data: items = [], isLoading } = useSmartCollectionItems(collection.id);
+  const updateRules = useUpdateSmartRules();
+  const [editing, setEditing] = useState(false);
+  const [editRules, setEditRules] = useState<SmartRule[]>([]);
+  const [editMatchMode, setEditMatchMode] = useState<"all" | "any">("all");
+  const [editEntityType, setEditEntityType] = useState<"" | "movie" | "series">("");
+
+  const currentRuleSet: SmartRuleSet | null = useMemo(() => {
+    if (!collection.smart_rules) return null;
+    try { return JSON.parse(collection.smart_rules); } catch { return null; }
+  }, [collection.smart_rules]);
+
+  const startEditing = () => {
+    if (currentRuleSet) {
+      setEditRules(currentRuleSet.rules);
+      setEditMatchMode(currentRuleSet.match);
+      setEditEntityType((currentRuleSet.entity_type || "") as "" | "movie" | "series");
+    }
+    setEditing(true);
+  };
+
+  const saveRules = () => {
+    const ruleSet: SmartRuleSet = {
+      match: editMatchMode,
+      rules: editRules,
+      entity_type: editEntityType || null,
+    };
+    updateRules.mutate({ id: collection.id, smartRules: JSON.stringify(ruleSet) });
+    setEditing(false);
+  };
+
+  // Resolve tag/genre names for display
+  const tagMap = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
+  const genreMap = useMemo(() => Object.fromEntries(genres.map((g) => [g.id, g.name])), [genres]);
+
+  const ruleLabel = (rule: SmartRule): string => {
+    const field = SMART_FIELDS.find((f) => f.value === rule.field)?.label || rule.field;
+    const ops = OPS_BY_FIELD[rule.field] || [];
+    const opLabel = ops.find((o) => o.value === rule.op)?.label || rule.op;
+    let val = String(rule.value);
+    if (rule.field === "tag") val = tagMap[Number(rule.value)] || val;
+    if (rule.field === "genre") val = genreMap[Number(rule.value)] || val;
+    if (rule.field === "owned") val = rule.value ? "Oui" : "Non";
+    return `${field} ${opLabel} ${val}`;
+  };
+
+  return (
+    <div style={{ padding: SP.xxxl }}>
+      {onClose && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: SP.s }}>
+          <button onClick={onClose} title="Fermer" style={{
+            ...btn.ghost, fontSize: FONT.xxl, lineHeight: 1, padding: `${SP.xs}px ${SP.s}px`, borderRadius: RADIUS.sm,
+            color: COLORS.textMuted,
+          }}>›</button>
+        </div>
+      )}
+
+      {/* Icon */}
+      <div style={{ textAlign: "center", marginBottom: SP.xl }}>
+        <div style={{
+          ...flex.center, width: 72, height: 72, borderRadius: RADIUS.xl, background: "#8B5CF620",
+          fontSize: 28, color: "#8B5CF6", margin: "0 auto",
+        }}>
+          ⚡
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center", fontSize: 15, fontWeight: WEIGHT.semi, marginBottom: SP.s }}>
+        {collection.name}
+      </div>
+      <div style={{ textAlign: "center", fontSize: FONT.sm, color: "#8B5CF6", fontWeight: WEIGHT.semi, marginBottom: SP.xl }}>
+        Smart Collection — {items.length} resultat{items.length !== 1 ? "s" : ""}
+      </div>
+
+      {collection.description && (
+        <div style={{ marginBottom: SP.xxl }}>
+          <SectionTitle>Description</SectionTitle>
+          <p style={{ fontSize: FONT.sm, color: COLORS.textSecondary, lineHeight: 1.5, marginTop: SP.s }}>
+            {collection.description}
+          </p>
+        </div>
+      )}
+
+      {/* Rules display / edit */}
+      <div style={{ marginBottom: SP.xxl }}>
+        <div style={{ ...flex.rowBetween, marginBottom: SP.m }}>
+          <SectionTitle>Regles</SectionTitle>
+          <button
+            onClick={editing ? saveRules : startEditing}
+            style={{
+              ...btn.primary, padding: `${SP.xs}px ${SP.lg}px`,
+              background: "#8B5CF6",
+            }}
+          >
+            {editing ? "Sauvegarder" : "Modifier"}
+          </button>
+        </div>
+
+        {!editing && currentRuleSet && (
+          <div>
+            <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, marginBottom: SP.s }}>
+              Mode : {currentRuleSet.match === "all" ? "Toutes (ET)" : "Au moins une (OU)"}
+              {currentRuleSet.entity_type && ` — ${currentRuleSet.entity_type === "movie" ? "Films" : "Series"} uniquement`}
+            </div>
+            {currentRuleSet.rules.map((r, i) => (
+              <div key={i} style={{
+                padding: `${SP.s}px ${SP.base}px`, borderRadius: RADIUS.sm, marginBottom: SP.xs,
+                background: COLORS.bgSurfaceAlt, fontSize: FONT.sm,
+              }}>
+                {ruleLabel(r)}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {editing && (
+          <div>
+            <div style={{ ...flex.rowGap(SP.base), marginBottom: SP.base }}>
+              <select value={editMatchMode} onChange={(e) => setEditMatchMode(e.target.value as "all" | "any")} style={selectStyle}>
+                <option value="all">Toutes (ET)</option>
+                <option value="any">Au moins une (OU)</option>
+              </select>
+              <select value={editEntityType} onChange={(e) => setEditEntityType(e.target.value as "" | "movie" | "series")} style={selectStyle}>
+                <option value="">Films + Series</option>
+                <option value="movie">Films</option>
+                <option value="series">Series</option>
+              </select>
+            </div>
+            {editRules.map((rule, idx) => (
+              <SmartRuleRow
+                key={idx}
+                rule={rule}
+                tags={tags}
+                genres={genres}
+                onChange={(updated) => { const next = [...editRules]; next[idx] = updated; setEditRules(next); }}
+                onRemove={() => setEditRules(editRules.filter((_, i) => i !== idx))}
+              />
+            ))}
+            <button
+              onClick={() => setEditRules([...editRules, { field: "year", op: "gte", value: 2000 }])}
+              style={{
+                padding: `${SP.xs}px ${SP.lg}px`, borderRadius: RADIUS.sm, border: `1px dashed ${COLORS.border}`,
+                background: "transparent", color: COLORS.textMuted, fontSize: FONT.sm, cursor: "pointer", marginTop: SP.s,
+              }}
+            >
+              + Ajouter une regle
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Results */}
+      <SectionTitle>Resultats ({items.length})</SectionTitle>
+      <div>
+        {isLoading && (
+          <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, paddingTop: SP.base }}>Chargement...</div>
+        )}
+        {!isLoading && items.length === 0 && (
+          <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, paddingTop: SP.s }}>
+            Aucun element ne correspond aux regles
+          </div>
+        )}
+        {items.map((item) => (
+          <div
+            key={`${item.entity_type}-${item.id}`}
+            style={{
+              ...flex.rowGap(SP.base),
+              padding: `${SP.m}px ${SP.base}px`, marginBottom: SP.s, borderRadius: RADIUS.md, background: COLORS.bgSurfaceAlt,
+            }}
+          >
+            {item.poster_path && (
+              <img
+                src={`https://image.tmdb.org/t/p/w92${item.poster_path}`}
+                alt=""
+                style={{ width: 24, height: 36, borderRadius: RADIUS.sm, objectFit: "cover", flexShrink: 0 }}
+              />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: FONT.base, fontWeight: WEIGHT.medium, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {item.title}
+              </div>
+              {item.year && <div style={{ fontSize: FONT.xs, color: COLORS.textMuted }}>{item.year}</div>}
+            </div>
+            <span style={{
+              fontSize: FONT.tiny, padding: `${SP.xs}px 5px`, borderRadius: RADIUS.sm, flexShrink: 0,
+              background: item.entity_type === "movie" ? COLORS.primary : "#8B5CF6", color: "#fff",
+            }}>
+              {item.entity_type === "movie" ? "Film" : "Serie"}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {onDelete && (
+        <div style={{ textAlign: "center", marginTop: SP.huge }}>
+          <button onClick={onDelete} style={{
+            ...btn.base, border: "1px solid var(--color-danger, #ef4444)",
+            background: "transparent", color: "var(--color-danger, #ef4444)",
+          }}>
+            Supprimer la collection
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -841,22 +1333,17 @@ function CollectionDetailPanel({
   };
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: SP.xxxl }}>
       {/* Close button */}
       {onClose && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: SP.s }}>
           <button
             onClick={onClose}
             title="Fermer"
             style={{
-              border: "none",
-              background: "transparent",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 18,
-              lineHeight: 1,
-              padding: "2px 4px",
-              borderRadius: 4,
+              ...btn.ghost, fontSize: FONT.xxl, lineHeight: 1,
+              padding: `${SP.xs}px ${SP.s}px`, borderRadius: RADIUS.sm,
+              color: COLORS.textMuted,
             }}
           >
             ›
@@ -865,18 +1352,16 @@ function CollectionDetailPanel({
       )}
 
       {/* Icon */}
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
+      <div style={{ textAlign: "center", marginBottom: SP.xl }}>
         <div
           style={{
+            ...flex.center,
             width: 72,
             height: 72,
-            borderRadius: 12,
-            background: "var(--bg-surface-alt)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            borderRadius: RADIUS.xl,
+            background: COLORS.bgSurfaceAlt,
             fontSize: 28,
-            color: "var(--color-primary)",
+            color: COLORS.primary,
             margin: "0 auto",
           }}
         >
@@ -884,36 +1369,29 @@ function CollectionDetailPanel({
         </div>
       </div>
 
-      <div style={{ textAlign: "center", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+      <div style={{ textAlign: "center", fontSize: 15, fontWeight: WEIGHT.semi, marginBottom: SP.s }}>
         {collection.name}
       </div>
-      <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
+      <div style={{ textAlign: "center", fontSize: FONT.sm, color: COLORS.textMuted, marginBottom: SP.xl }}>
         {collection.item_count} élément{collection.item_count !== 1 ? "s" : ""}
       </div>
 
       {collection.description && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: SP.xxl }}>
           <SectionTitle>Description</SectionTitle>
-          <p style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5, marginTop: 4 }}>
+          <p style={{ fontSize: FONT.sm, color: COLORS.textSecondary, lineHeight: 1.5, marginTop: SP.s }}>
             {collection.description}
           </p>
         </div>
       )}
 
       {/* Content section */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+      <div style={{ ...flex.rowBetween, marginBottom: SP.m }}>
         <SectionTitle>Contenu</SectionTitle>
         <button
           onClick={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
           style={{
-            padding: "3px 10px",
-            borderRadius: 5,
-            border: "none",
-            background: "var(--color-primary)",
-            color: "#fff",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: "pointer",
+            ...btn.primary, padding: `${SP.xs}px ${SP.lg}px`,
           }}
         >
           + Ajouter
@@ -922,7 +1400,7 @@ function CollectionDetailPanel({
 
       {/* Inline search to add items */}
       {showSearch && (
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: SP.lg }}>
           <input
             autoFocus
             type="text"
@@ -930,23 +1408,19 @@ function CollectionDetailPanel({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
+              ...input.base,
               width: "100%",
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--color-primary)",
-              background: "var(--bg-surface-alt)",
-              color: "var(--text-main)",
-              fontSize: 12,
+              border: `1px solid ${COLORS.primary}`,
+              background: COLORS.bgSurfaceAlt,
               boxSizing: "border-box",
-              outline: "none",
             }}
           />
           {searchResults.length > 0 && (
             <div
               style={{
-                marginTop: 4,
-                border: "1px solid var(--border)",
-                borderRadius: 6,
+                marginTop: SP.s,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: RADIUS.md,
                 overflow: "hidden",
               }}
             >
@@ -955,28 +1429,26 @@ function CollectionDetailPanel({
                   key={`${r.type}-${r.id}`}
                   onClick={() => handleAdd(r)}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "6px 10px",
+                    ...flex.rowBetween,
+                    padding: `${SP.m}px ${SP.lg}px`,
                     cursor: "pointer",
-                    background: "var(--bg-surface)",
-                    borderBottom: "1px solid var(--border)",
-                    fontSize: 12,
-                    gap: 8,
+                    background: COLORS.bgSurface,
+                    borderBottom: `1px solid ${COLORS.border}`,
+                    fontSize: FONT.base,
+                    gap: SP.base,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-alt)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = COLORS.bgSurfaceAlt)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = COLORS.bgSurface)}
                 >
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.title}
                   </span>
                   <span
                     style={{
-                      fontSize: 9,
-                      padding: "2px 5px",
-                      borderRadius: 4,
-                      background: r.type === "movie" ? "var(--color-primary)" : "#8B5CF6",
+                      fontSize: FONT.tiny,
+                      padding: `${SP.xs}px 5px`,
+                      borderRadius: RADIUS.sm,
+                      background: r.type === "movie" ? COLORS.primary : "#8B5CF6",
                       color: "#fff",
                       flexShrink: 0,
                     }}
@@ -988,7 +1460,7 @@ function CollectionDetailPanel({
             </div>
           )}
           {searchQuery.trim() && searchResults.length === 0 && (
-            <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>
+            <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, padding: `${SP.m}px 0` }}>
               Aucun résultat
             </div>
           )}
@@ -998,10 +1470,10 @@ function CollectionDetailPanel({
       {/* Items list */}
       <div>
         {isLoading && (
-          <div style={{ fontSize: 11, color: "var(--text-muted)", paddingTop: 8 }}>Chargement…</div>
+          <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, paddingTop: SP.base }}>Chargement…</div>
         )}
         {!isLoading && items.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--text-muted)", paddingTop: 4 }}>
+          <div style={{ fontSize: FONT.sm, color: COLORS.textMuted, paddingTop: SP.s }}>
             Collection vide — utilisez "+ Ajouter" pour y ajouter des films ou séries
           </div>
         )}
@@ -1013,23 +1485,21 @@ function CollectionDetailPanel({
             <div
               key={item.id}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 8px",
-                marginBottom: 4,
-                borderRadius: 6,
-                background: "var(--bg-surface-alt)",
+                ...flex.rowGap(SP.base),
+                padding: `${SP.m}px ${SP.base}px`,
+                marginBottom: SP.s,
+                borderRadius: RADIUS.md,
+                background: COLORS.bgSurfaceAlt,
               }}
             >
-              <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 16, textAlign: "center" }}>
+              <span style={{ fontSize: FONT.xs, color: COLORS.textMuted, minWidth: SP.xxxl, textAlign: "center" }}>
                 {item.position}
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 12,
-                    fontWeight: 500,
+                    fontSize: FONT.base,
+                    fontWeight: WEIGHT.medium,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -1038,15 +1508,15 @@ function CollectionDetailPanel({
                   {title}
                 </div>
                 {item.notes && (
-                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{item.notes}</div>
+                  <div style={{ fontSize: FONT.xs, color: COLORS.textMuted }}>{item.notes}</div>
                 )}
               </div>
               <span
                 style={{
-                  fontSize: 9,
-                  padding: "2px 5px",
-                  borderRadius: 4,
-                  background: isMovie ? "var(--color-primary)" : "#8B5CF6",
+                  fontSize: FONT.tiny,
+                  padding: `${SP.xs}px 5px`,
+                  borderRadius: RADIUS.sm,
+                  background: isMovie ? COLORS.primary : "#8B5CF6",
                   color: "#fff",
                   flexShrink: 0,
                 }}
@@ -1057,13 +1527,11 @@ function CollectionDetailPanel({
                 onClick={() => onRemoveItem?.(item.id)}
                 title="Retirer de la collection"
                 style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontSize: 14,
+                  ...btn.ghost,
+                  fontSize: FONT.lg,
                   lineHeight: 1,
-                  padding: "0 2px",
+                  padding: `0 ${SP.xs}px`,
+                  color: COLORS.textMuted,
                   flexShrink: 0,
                 }}
               >
@@ -1076,18 +1544,14 @@ function CollectionDetailPanel({
 
       {/* Delete collection button */}
       {onDelete && (
-        <div style={{ textAlign: "center", marginTop: 20 }}>
+        <div style={{ textAlign: "center", marginTop: SP.huge }}>
           <button
             onClick={onDelete}
             style={{
-              padding: "6px 16px",
-              borderRadius: 6,
+              ...btn.base,
               border: "1px solid var(--color-danger, #ef4444)",
               background: "transparent",
               color: "var(--color-danger, #ef4444)",
-              fontSize: 11,
-              fontWeight: 500,
-              cursor: "pointer",
             }}
           >
             Supprimer la collection
